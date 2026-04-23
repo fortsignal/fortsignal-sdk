@@ -1,6 +1,6 @@
 # @fortsignal/sdk
 
-The official TypeScript SDK for [FortSignal](https://fortsignal.com) — intent verification infrastructure for AI agents and human-authorized actions.
+The official TypeScript SDK for [FortSignal](https://fortsignal.com) — intent verification infrastructure for agents and human-authorized actions.
 
 **Full documentation:** [fortsignal.com/docs](https://fortsignal.com/docs)
 
