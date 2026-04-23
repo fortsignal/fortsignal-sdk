@@ -100,7 +100,8 @@ Generate an Ed25519 keypair for your agent and register the public key.
 
 ```typescript
 const { agentId } = await client.agent.register({
-  publicKey: agentPublicKeyBase64,
+  agentId: 'my-agent-01',        // your identifier — alphanumeric, dash, underscore, max 64 chars
+  publicKey: agentPublicKeyBase64, // Ed25519 public key, base64url encoded
 })
 // Store agentId — you'll need it to issue a delegation from the dashboard
 ```
@@ -171,7 +172,7 @@ try {
 ### `client.agent`
 | Method | Description |
 |--------|-------------|
-| `agent.register({ publicKey })` | Register an agent's Ed25519 public key |
+| `agent.register({ agentId, publicKey })` | Register an agent's Ed25519 public key |
 | `agent.verify({ delegationId, action, amount, recipient, signature, nonce })` | Verify an agent-signed action |
 
 ---

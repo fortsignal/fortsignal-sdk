@@ -59,10 +59,12 @@ export interface ChallengeVerifyResponse {
 
 // Agent
 export interface AgentRegisterParams {
+  agentId: string
   publicKey: string
 }
 
 export interface AgentRegisterResponse {
+  status: string
   agentId: string
   registeredAt: string
 }

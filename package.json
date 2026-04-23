@@ -1,6 +1,6 @@
 {
   "name": "@fortsignal/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Intent verification infrastructure for AI agents and human-authorized actions.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
