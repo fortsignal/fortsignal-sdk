@@ -138,17 +138,30 @@ if (result.allowed) {
 
 ## Error Handling
 
-All API errors throw a `FortSignalError` with a `status` (HTTP code) and `code` (machine-readable reason).
+**Deny decisions** are not errors — they come back in the response body:
+
+```typescript
+const result = await client.challenge.verify({ challengeId, assertion })
+
+if (!result.allowed) {
+  // result.reason — why it was denied:
+  // 'policy_expired' | 'action_not_allowed' | 'amount_exceeds_policy'
+  // 'recipient_not_allowed' | 'biometric_required' | 'parameters_tampered'
+  console.error(result.reason)
+}
+```
+
+**HTTP errors** (bad API key, rate limit, server error) throw a `FortSignalError`:
 
 ```typescript
 import { FortSignal, FortSignalError } from '@fortsignal/sdk'
 
 try {
-  const result = await client.challenge.verify({ challengeId, assertion })
+  const result = await client.challenge.start({ ... })
 } catch (err) {
   if (err instanceof FortSignalError) {
-    console.error(err.code)   // e.g. 'invalid_challenge'
-    console.error(err.status) // e.g. 400
+    console.error(err.code)   // e.g. 'invalid_api_key'
+    console.error(err.status) // e.g. 401
   }
 }
 ```
