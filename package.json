@@ -1,0 +1,30 @@
+{
+  "name": "@fortsignal/sdk",
+  "version": "0.1.0",
+  "description": "Intent verification infrastructure for AI agents and human-authorized actions.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "fortsignal",
+    "intent-verification",
+    "passkey",
+    "webauthn",
+    "agent",
+    "authorization"
+  ],
+  "author": "FortSignal",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
