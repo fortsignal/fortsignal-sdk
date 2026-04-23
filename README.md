@@ -2,80 +2,142 @@
 
 The official TypeScript SDK for [FortSignal](https://fortsignal.com) — intent verification infrastructure for AI agents and human-authorized actions.
 
+**Full documentation:** [fortsignal.com/docs](https://fortsignal.com/docs)
+
+## What it does
+
+FortSignal verifies that the exact parameters a user or agent approved are the same parameters that execute. Every sensitive action gets a fresh hardware-signed approval — cryptographically bound to the action, amount, recipient, and any other fields you define.
+
 ## Installation
 
 ```bash
 npm install @fortsignal/sdk
 ```
 
-## Quick Start
+You'll also need the WebAuthn browser library for your frontend:
+
+```bash
+npm install @simplewebauthn/browser
+```
+
+## Get an API key
+
+Sign up at [fortsignal.com/signup](https://fortsignal.com/signup). You'll get a `fs_live_...` key immediately after checkout.
+
+---
+
+## Human Flow
+
+### Step 1 — Initialize the client (server-side)
 
 ```typescript
 import { FortSignal } from '@fortsignal/sdk'
 
-const client = new FortSignal({ apiKey: 'fs_live_...' })
+const client = new FortSignal({ apiKey: process.env.FORTSIGNAL_API_KEY })
 ```
 
-## Human Flow
+### Step 2 — Register a user's passkey (one time per user)
 
-Register a user's passkey once, then require a fresh signature for every sensitive action.
+Call this when the user sets up their account or enables high-security actions.
 
 ```typescript
-// 1. Register a user's passkey (one time)
-const options = await client.register.start({ userId: 'user_123', username: 'alice@example.com' })
-// Pass options to navigator.credentials.create() in the browser
-const attestation = await navigator.credentials.create({ publicKey: options })
-await client.register.complete({ userId: 'user_123', challenge: options.challenge, attestation })
+// Server: start registration
+const options = await client.register.start({
+  userId: 'user_123',
+  username: 'alice@example.com',
+})
 
-// 2. Require approval for a sensitive action
+// Browser: prompt the user to create a passkey
+import { startRegistration } from '@simplewebauthn/browser'
+const attestation = await startRegistration({ optionsJSON: options })
+
+// Server: complete registration
+await client.register.complete({
+  userId: 'user_123',
+  challenge: options.challenge,
+  attestation,
+})
+```
+
+### Step 3 — Require approval before a sensitive action
+
+```typescript
+// Server: start a challenge before the action executes
 const { challengeId, challenge } = await client.challenge.start({
   userId: 'user_123',
   action: 'transfer',
   amount: 500,
   recipient: 'bob@example.com',
   from: 'alice@example.com',
-  metadata: { orderId: 'ord_123' },
+  metadata: { orderId: 'ord_123' }, // optional — any JSON object
 })
-// Pass challenge to navigator.credentials.get() in the browser
-const assertion = await navigator.credentials.get({ publicKey: { challenge, ... } })
 
-// 3. Verify the signature
+// Browser: prompt the user to sign with their passkey
+import { startAuthentication } from '@simplewebauthn/browser'
+const assertion = await startAuthentication({ optionsJSON: { challenge, ... } })
+
+// Server: verify the signature
 const result = await client.challenge.verify({ challengeId, assertion })
+
 if (result.allowed) {
-  // Execute the action — result.signalId is your audit receipt
+  // result.signalId — store this as your audit receipt
+  await executeTransfer()
 } else {
-  // Denied — result.reason explains why
+  // result.reason — why it was denied
+  // 'policy_expired' | 'action_not_allowed' | 'amount_exceeds_policy'
+  // 'recipient_not_allowed' | 'biometric_required' | 'parameters_tampered'
+  throw new Error(result.reason)
 }
 ```
 
+---
+
 ## Agent Flow
 
-Register an AI agent's public key via the SDK. Issue delegations and manage agents (revoke, rotate, list) from your [FortSignal dashboard](https://fortsignal.com/dashboard) — delegation management requires owner authentication and cannot be done via API key.
+### Step 1 — Register an agent's public key (one time per agent)
+
+Generate an Ed25519 keypair for your agent and register the public key.
 
 ```typescript
-// 1. Register the agent's Ed25519 public key
-const { agentId } = await client.agent.register({ publicKey: agentPublicKey })
+const { agentId } = await client.agent.register({
+  publicKey: agentPublicKeyBase64,
+})
+// Store agentId — you'll need it to issue a delegation from the dashboard
+```
 
-// 2. Issue a delegation from your dashboard at fortsignal.com/dashboard
-//    Set the scope: allowed actions, max amount, recipients, expiry
-//    The dashboard returns a delegationId — store it with your agent
+### Step 2 — Issue a delegation (dashboard)
 
-// 3. Verify each agent action (agent signs with its private key)
+Go to your [FortSignal dashboard](https://fortsignal.com/dashboard) and issue a delegation for the agent. Set the scope — allowed actions, max amount per action, allowed recipients, and expiry. Copy the `delegationId` and store it with your agent.
+
+> Delegation management requires owner authentication and cannot be done via API key. This is intentional — a compromised API key cannot grant or revoke agent permissions.
+
+### Step 3 — Verify each agent action
+
+The agent signs a nonce with its Ed25519 private key before each action.
+
+```typescript
 const result = await client.agent.verify({
-  delegationId,
+  delegationId: 'del_abc123',
   action: 'transfer',
-  amount: 500,
-  recipient: 'bob@example.com',
-  signature: agentSignature,
+  amount: 250,
+  recipient: 'acct_456',
+  signature: agentSignature,  // Ed25519 signature over the nonce
   nonce: challengeNonce,
 })
 
 if (result.allowed) {
-  // Execute — result.signalId is your audit receipt
+  // result.signalId — audit receipt
+  await executeAction()
+} else {
+  // result.reason — scope exceeded, delegation expired, signature invalid, etc.
 }
 ```
 
+---
+
 ## Error Handling
+
+All API errors throw a `FortSignalError` with a `status` (HTTP code) and `code` (machine-readable reason).
 
 ```typescript
 import { FortSignal, FortSignalError } from '@fortsignal/sdk'
@@ -84,35 +146,41 @@ try {
   const result = await client.challenge.verify({ challengeId, assertion })
 } catch (err) {
   if (err instanceof FortSignalError) {
-    console.error(err.code)   // e.g. 'policy_expired'
-    console.error(err.status) // HTTP status
+    console.error(err.code)   // e.g. 'invalid_challenge'
+    console.error(err.status) // e.g. 400
   }
 }
 ```
+
+---
 
 ## API Reference
 
 ### `client.register`
 | Method | Description |
 |--------|-------------|
-| `register.start(params)` | Begin passkey registration for a user |
-| `register.complete(params)` | Complete passkey registration |
+| `register.start({ userId, username })` | Begin passkey registration |
+| `register.complete({ userId, challenge, attestation })` | Complete passkey registration |
 
 ### `client.challenge`
 | Method | Description |
 |--------|-------------|
-| `challenge.start(params)` | Start a challenge for a human action |
-| `challenge.verify(params)` | Verify the signed assertion |
+| `challenge.start({ userId, action, amount, recipient, from, metadata? })` | Start a challenge |
+| `challenge.verify({ challengeId, assertion })` | Verify the signed assertion |
 
 ### `client.agent`
 | Method | Description |
 |--------|-------------|
-| `agent.register(params)` | Register an AI agent's Ed25519 public key |
-| `agent.verify(params)` | Verify an agent-signed action |
+| `agent.register({ publicKey })` | Register an agent's Ed25519 public key |
+| `agent.verify({ delegationId, action, amount, recipient, signature, nonce })` | Verify an agent-signed action |
 
-> Delegation management (issue, revoke, rotate, list) is handled through the [FortSignal dashboard](https://fortsignal.com/dashboard). This requires owner authentication and is intentionally separate from API key access.
+---
 
 ## Requirements
 
 - Node.js 18+
 - An API key from [fortsignal.com](https://fortsignal.com)
+
+## Full Documentation
+
+[fortsignal.com/docs](https://fortsignal.com/docs)
