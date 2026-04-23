@@ -34,6 +34,7 @@ const { challengeId, challenge } = await client.challenge.start({
   amount: 500,
   recipient: 'bob@example.com',
   from: 'alice@example.com',
+  metadata: { orderId: 'ord_123' },
 })
 // Pass challenge to navigator.credentials.get() in the browser
 const assertion = await navigator.credentials.get({ publicKey: { challenge, ... } })
@@ -49,24 +50,17 @@ if (result.allowed) {
 
 ## Agent Flow
 
-Register an AI agent, issue a scoped delegation, and verify every action it takes.
+Register an AI agent's public key via the SDK. Issue delegations and manage agents (revoke, rotate, list) from your [FortSignal dashboard](https://fortsignal.com/dashboard) — delegation management requires owner authentication and cannot be done via API key.
 
 ```typescript
-// 1. Register the agent
+// 1. Register the agent's Ed25519 public key
 const { agentId } = await client.agent.register({ publicKey: agentPublicKey })
 
-// 2. Issue a delegation with scope constraints
-const { delegationId } = await client.agent.delegate({
-  agentId,
-  scope: {
-    actions: ['transfer', 'payment'],
-    maxAmountPerAction: 1000,
-    recipients: ['bob@example.com'],
-    expiresAt: '2026-12-31T00:00:00Z',
-  },
-})
+// 2. Issue a delegation from your dashboard at fortsignal.com/dashboard
+//    Set the scope: allowed actions, max amount, recipients, expiry
+//    The dashboard returns a delegationId — store it with your agent
 
-// 3. Verify each agent action (agent signs the challenge with its private key)
+// 3. Verify each agent action (agent signs with its private key)
 const result = await client.agent.verify({
   delegationId,
   action: 'transfer',
@@ -113,11 +107,10 @@ try {
 ### `client.agent`
 | Method | Description |
 |--------|-------------|
-| `agent.register(params)` | Register an AI agent's public key |
-| `agent.delegate(params)` | Issue a scoped delegation to an agent |
+| `agent.register(params)` | Register an AI agent's Ed25519 public key |
 | `agent.verify(params)` | Verify an agent-signed action |
-| `agent.revoke(params)` | Revoke a delegation |
-| `agent.list()` | List all registered agents and delegations |
+
+> Delegation management (issue, revoke, rotate, list) is handled through the [FortSignal dashboard](https://fortsignal.com/dashboard). This requires owner authentication and is intentionally separate from API key access.
 
 ## Requirements
 

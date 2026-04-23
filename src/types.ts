@@ -35,7 +35,7 @@ export interface ChallengeStartParams {
   amount: number
   recipient: string
   from: string
-  metadata?: string
+  metadata?: Record<string, unknown>
   userId: string
 }
 
@@ -109,6 +109,17 @@ export interface AgentRevokeParams {
 export interface AgentRevokeResponse {
   status: string
   delegationId: string
+}
+
+export interface AgentRotateParams {
+  agentId: string
+  publicKey: string
+}
+
+export interface AgentRotateResponse {
+  status: string
+  agentId: string
+  message: string
 }
 
 export interface AgentListResponse {

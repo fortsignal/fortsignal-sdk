@@ -16,13 +16,8 @@ export type {
   ChallengeVerifyResponse,
   AgentRegisterParams,
   AgentRegisterResponse,
-  AgentDelegateParams,
-  AgentDelegateResponse,
   AgentVerifyParams,
   AgentVerifyResponse,
-  AgentRevokeParams,
-  AgentRevokeResponse,
-  AgentListResponse,
 } from './types'
 
 const DEFAULT_BASE_URL = 'https://api.fortsignal.com'
