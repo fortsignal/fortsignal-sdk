@@ -8,6 +8,14 @@ The official TypeScript SDK for [FortSignal](https://fortsignal.com) — intent 
 
 FortSignal verifies that the exact parameters a user or agent approved are the same parameters that execute. Every sensitive action gets a fresh hardware-signed approval — cryptographically bound to the action, amount, recipient, and any other fields you define.
 
+### Two separate layers
+
+**Intent fields** (`action`, `amount`, `recipient`, and optionally `from`, `metadata`) describe the specific action being requested. They are sent per-request and cryptographically signed — proof that the exact values were approved at that moment.
+
+**Policy** is separate. Policy profiles are persistent rules you configure once in your FortSignal dashboard and attach to users or agent delegations. After the signature passes, FortSignal checks the intent field values against those rules — `allowedActions`, `maxAmountPerAction`, `allowedRecipients`. A valid signature is not enough on its own; if the action violates any policy constraint, FortSignal returns `decision: deny`.
+
+For agents there is a third layer: the delegation scope (approved by a human upfront) is checked before policy. All three must pass — valid signature, within delegation scope, within policy — for the decision to be `allow`.
+
 ## Installation
 
 ```bash
