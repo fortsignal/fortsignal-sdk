@@ -14,13 +14,17 @@ FortSignal verifies that the exact parameters a user or agent approved are the s
 npm install @fortsignal/sdk
 ```
 
-**Human flow only** — if you are verifying human actions via passkey, also install the WebAuthn browser library for your frontend:
+**Human interaction required** — if humans approve actions or agent requests via passkey in your app, install the WebAuthn browser library for your frontend:
 
 ```bash
 npm install @simplewebauthn/browser
 ```
 
-**Agent flow only** — no browser library needed. Agents sign with an Ed25519 private key on the server. No WebAuthn, no browser interaction, no additional dependencies.
+This covers:
+- Users approving their own actions (transfer, delete, authorize)
+- Users approving agent actions in a human-in-the-loop flow
+
+**Agent only (no human interaction)** — if agents act autonomously within their delegation scope, no browser library is needed. Agents sign with an Ed25519 private key on the server — no WebAuthn, no browser, no additional dependencies.
 
 ## Get an API key
 
