@@ -14,11 +14,13 @@ FortSignal verifies that the exact parameters a user or agent approved are the s
 npm install @fortsignal/sdk
 ```
 
-You'll also need the WebAuthn browser library for your frontend:
+**Human flow only** — if you are verifying human actions via passkey, also install the WebAuthn browser library for your frontend:
 
 ```bash
 npm install @simplewebauthn/browser
 ```
+
+**Agent flow only** — no browser library needed. Agents sign with an Ed25519 private key on the server. No WebAuthn, no browser interaction, no additional dependencies.
 
 ## Get an API key
 
