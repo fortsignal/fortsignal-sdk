@@ -1,6 +1,6 @@
 {
   "name": "@fortsignal/sdk",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Intent verification infrastructure for agents and human-authorized actions.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,6 +30,15 @@
   ],
   "author": "FortSignal",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fortsignal/fortsignal-sdk.git"
+  },
+  "homepage": "https://fortsignal.com",
+  "bugs": {
+    "url": "https://github.com/fortsignal/fortsignal-sdk/issues",
+    "email": "hr@fortsignal.com"
+  },
   "devDependencies": {
     "typescript": "^5.4.0"
   },
