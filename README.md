@@ -12,7 +12,7 @@ FortSignal verifies that the exact parameters a user or agent approved are the s
 
 **Intent fields** (`action`, `amount`, `recipient`, and optionally `from`, `metadata`) describe the specific action being requested. They are sent per-request and cryptographically signed — proof that the exact values were approved at that moment.
 
-**Policy** is separate. Policy profiles are persistent rules you configure once in your FortSignal dashboard and attach to users or agent delegations. After the signature passes, FortSignal checks the intent field values against those rules — `allowedActions`, `maxAmountPerAction`, `allowedRecipients`. A valid signature is not enough on its own; if the action violates any policy constraint, FortSignal returns `decision: deny`.
+**Policy** is separate. Policy profiles are persistent rules you configure once in your FortSignal dashboard and attach to users or agents. After the signature passes, FortSignal checks the intent field values against those rules — `allowedActions`, `maxAmountPerAction`, `allowedRecipients`. A valid signature is not enough on its own; if the action violates any policy constraint, FortSignal returns `decision: deny`.
 
 For agents there is a third layer: the delegation must be active and not expired. All three must pass — valid signature, active delegation, within policy — for the decision to be `allow`.
 
