@@ -14,7 +14,7 @@ FortSignal verifies that the exact parameters a user or agent approved are the s
 
 **Policy** is separate. Policy profiles are persistent rules you configure once in your FortSignal dashboard and attach to users or agent delegations. After the signature passes, FortSignal checks the intent field values against those rules — `allowedActions`, `maxAmountPerAction`, `allowedRecipients`. A valid signature is not enough on its own; if the action violates any policy constraint, FortSignal returns `decision: deny`.
 
-For agents there is a third layer: the delegation scope (approved by a human upfront) is checked before policy. All three must pass — valid signature, within delegation scope, within policy — for the decision to be `allow`.
+For agents there is a third layer: the delegation must be active and not expired. All three must pass — valid signature, active delegation, within policy — for the decision to be `allow`.
 
 ## Installation
 
@@ -22,17 +22,13 @@ For agents there is a third layer: the delegation scope (approved by a human upf
 npm install @fortsignal/sdk
 ```
 
-**Human interaction required** — if humans approve actions or agent requests via passkey in your app, install the WebAuthn browser library for your frontend:
+**Human interaction required** — if humans approve actions via passkey in your app, install the WebAuthn browser library for your frontend:
 
 ```bash
 npm install @simplewebauthn/browser
 ```
 
-This covers:
-- Users approving their own actions (transfer, delete, authorize)
-- Users approving agent actions in a human-in-the-loop flow
-
-**Agent only (no human interaction)** — if agents act autonomously within their delegation scope, no browser library is needed. Agents sign with an Ed25519 private key on the server — no WebAuthn, no browser, no additional dependencies.
+**Agent only (no human interaction)** — if agents act autonomously within their policy, no browser library is needed. Agents sign with an Ed25519 private key on the server — no WebAuthn, no browser, no additional dependencies.
 
 ## Get an API key
 
@@ -77,7 +73,7 @@ await client.register.complete({
 
 ```typescript
 // Server: start a challenge before the action executes
-const { challengeId, challenge } = await client.challenge.start({
+const options = await client.challenge.start({
   userId: 'user_123',
   action: 'transfer',
   amount: 500,
@@ -88,18 +84,18 @@ const { challengeId, challenge } = await client.challenge.start({
 
 // Browser: prompt the user to sign with their passkey
 import { startAuthentication } from '@simplewebauthn/browser'
-const assertion = await startAuthentication({ optionsJSON: { challenge, ... } })
+const assertion = await startAuthentication({ optionsJSON: options })
 
 // Server: verify the signature
-const result = await client.challenge.verify({ challengeId, assertion })
+const result = await client.challenge.verify(assertion)
 
-if (result.allowed) {
+if (result.decision === 'allow') {
   // result.signalId — store this as your audit receipt
   await executeTransfer()
 } else {
-  // result.reason — why it was denied
+  // result.reason — why it was denied:
   // 'policy_expired' | 'action_not_allowed' | 'amount_exceeds_policy'
-  // 'recipient_not_allowed' | 'biometric_required' | 'parameters_tampered'
+  // 'recipient_not_allowed' | 'parameters_tampered' | 'invalid_challenge'
   throw new Error(result.reason)
 }
 ```
@@ -113,38 +109,52 @@ if (result.allowed) {
 Generate an Ed25519 keypair for your agent and register the public key.
 
 ```typescript
-const { agentId } = await client.agent.register({
-  agentId: 'my-agent-01',        // your identifier — alphanumeric, dash, underscore, max 64 chars
-  publicKey: agentPublicKeyBase64, // Ed25519 public key, base64url encoded
+await client.agent.register({
+  agentId: 'my-agent-01',
+  publicKey: agentPublicKeyBase64url, // Ed25519 public key, base64url encoded
 })
-// Store agentId — you'll need it to issue a delegation from the dashboard
+// Agent now appears in your dashboard — assign a policy before it can act
 ```
 
-### Step 2 — Issue a delegation (dashboard)
+### Step 2 — Assign a policy (dashboard)
 
-Go to your [FortSignal dashboard](https://fortsignal.com/dashboard) and issue a delegation for the agent. Set the scope — allowed actions, max amount per action, allowed recipients, and expiry. Copy the `delegationId` and store it with your agent.
+Go to your [FortSignal dashboard](https://fortsignal.com/dashboard) and assign a policy to the agent. The policy defines allowed actions, amount caps, and approved recipients. Set an expiry for the delegation.
 
-> Delegation management requires owner authentication and cannot be done via API key. This is intentional — a compromised API key cannot grant or revoke agent permissions.
+> Policy assignment requires owner authentication and cannot be done via API key. This is intentional — a compromised API key cannot grant or revoke agent permissions.
 
 ### Step 3 — Verify each agent action
 
-The agent signs a nonce with its Ed25519 private key before each action.
+The agent starts a challenge, signs it with its Ed25519 private key, then submits the signature.
 
 ```typescript
-const result = await client.agent.verify({
-  delegationId: 'del_abc123',
+// 1. Start a challenge — FortSignal checks delegation and policy before issuing it
+const { challenge } = await client.agent.startChallenge({
+  agentId: 'my-agent-01',
   action: 'transfer',
   amount: 250,
   recipient: 'acct_456',
-  signature: agentSignature,  // Ed25519 signature over the nonce
-  nonce: challengeNonce,
 })
 
-if (result.allowed) {
+// 2. Sign the challenge bytes with your agent's Ed25519 private key
+const challengeBytes = Buffer.from(challenge, 'base64url')
+const sigBytes = await crypto.subtle.sign('Ed25519', privateKey, challengeBytes)
+const signature = Buffer.from(sigBytes).toString('base64url')
+
+// 3. Verify
+const result = await client.agent.verify({
+  agentId: 'my-agent-01',
+  challenge,
+  signature,
+})
+
+if (result.decision === 'allow') {
   // result.signalId — audit receipt
+  // result.delegationId — traces back to the human who approved this agent
   await executeAction()
 } else {
-  // result.reason — scope exceeded, delegation expired, signature invalid, etc.
+  // result.reason — why it was denied:
+  // 'delegation_invalid' | 'policy_expired' | 'action_not_allowed'
+  // 'amount_exceeds_policy' | 'recipient_not_allowed' | 'verification_failed'
 }
 ```
 
@@ -152,15 +162,13 @@ if (result.allowed) {
 
 ## Error Handling
 
-**Deny decisions** are not errors — they come back in the response body:
+**Deny decisions** are not errors — they come back in the response body with `decision: 'deny'`:
 
 ```typescript
-const result = await client.challenge.verify({ challengeId, assertion })
+const result = await client.challenge.verify(assertion)
 
-if (!result.allowed) {
-  // result.reason — why it was denied:
-  // 'policy_expired' | 'action_not_allowed' | 'amount_exceeds_policy'
-  // 'recipient_not_allowed' | 'biometric_required' | 'parameters_tampered'
+if (result.decision === 'deny') {
+  // result.reason — why it was denied
   console.error(result.reason)
 }
 ```
@@ -193,14 +201,15 @@ try {
 ### `client.challenge`
 | Method | Description |
 |--------|-------------|
-| `challenge.start({ userId, action, amount, recipient, from, metadata? })` | Start a challenge |
-| `challenge.verify({ challengeId, assertion })` | Verify the signed assertion |
+| `challenge.start({ userId, action, amount, recipient, from?, metadata?, requireBiometric? })` | Start a challenge |
+| `challenge.verify(assertion)` | Verify the signed assertion |
 
 ### `client.agent`
 | Method | Description |
 |--------|-------------|
 | `agent.register({ agentId, publicKey })` | Register an agent's Ed25519 public key |
-| `agent.verify({ delegationId, action, amount, recipient, signature, nonce })` | Verify an agent-signed action |
+| `agent.startChallenge({ agentId, action, amount, recipient, from?, metadata? })` | Start a challenge for an agent action |
+| `agent.verify({ agentId, challenge, signature })` | Submit the signed challenge |
 
 ---
 

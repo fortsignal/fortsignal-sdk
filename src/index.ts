@@ -16,6 +16,8 @@ export type {
   ChallengeVerifyResponse,
   AgentRegisterParams,
   AgentRegisterResponse,
+  AgentChallengeStartParams,
+  AgentChallengeStartResponse,
   AgentVerifyParams,
   AgentVerifyResponse,
 } from './types'

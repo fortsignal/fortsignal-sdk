@@ -29,32 +29,36 @@ export interface RegisterCompleteResponse {
   userId: string
 }
 
-// Challenge
+// Challenge (human flow)
 export interface ChallengeStartParams {
+  userId: string
   action: string
   amount: number
   recipient: string
-  from: string
+  from?: string
   metadata?: Record<string, unknown>
-  userId: string
+  requireBiometric?: boolean
 }
 
 export interface ChallengeStartResponse {
-  challengeId: string
   challenge: string
-  expiresAt: string
+  [key: string]: unknown
 }
 
 export interface ChallengeVerifyParams {
-  challengeId: string
-  assertion: object
+  [key: string]: unknown
 }
 
 export interface ChallengeVerifyResponse {
-  allowed: boolean
+  decision: 'allow' | 'deny'
   signalId?: string
   policyId?: string
   reason?: string
+  verifiedBy?: 'human' | 'agent'
+  verifiedAt?: string
+  action?: string
+  amount?: number
+  recipient?: string
 }
 
 // Agent
@@ -69,48 +73,48 @@ export interface AgentRegisterResponse {
   registeredAt: string
 }
 
-export interface AgentDelegateParams {
+export interface AgentChallengeStartParams {
   agentId: string
-  scope: {
-    actions: string[]
-    maxAmountPerAction: number
-    recipients: string[]
-    expiresAt: string
-  }
-  policyId?: string
-}
-
-export interface AgentDelegateResponse {
-  delegationId: string
-  agentId: string
-  scope: object
-  issuedAt: string
-  expiresAt: string
-}
-
-export interface AgentVerifyParams {
-  delegationId: string
   action: string
   amount: number
   recipient: string
+  from?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface AgentChallengeStartResponse {
+  challenge: string
+  agentId: string
+  delegationId: string
+  expiresIn: number
+}
+
+export interface AgentVerifyParams {
+  agentId: string
+  challenge: string
   signature: string
-  nonce: string
 }
 
 export interface AgentVerifyResponse {
-  allowed: boolean
+  decision: 'allow' | 'deny'
   signalId?: string
   policyId?: string
+  delegationId?: string
   reason?: string
+  verifiedBy?: 'agent'
+  verifiedAt?: string
+  action?: string
+  amount?: number
+  recipient?: string
 }
 
 export interface AgentRevokeParams {
-  delegationId: string
+  agentId: string
 }
 
 export interface AgentRevokeResponse {
   status: string
-  delegationId: string
+  agentId: string
 }
 
 export interface AgentRotateParams {
@@ -129,12 +133,12 @@ export interface AgentListResponse {
     agentId: string
     registeredAt: string
     rotatedAt?: string
-    delegations: Array<{
+    delegation?: {
       delegationId: string
-      scope: object
+      policyId: string
       issuedAt: string
       expiresAt: string
-    }>
+    }
   }>
 }
 
