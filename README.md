@@ -76,10 +76,10 @@ await client.register.complete({
 const options = await client.challenge.start({
   userId: 'user_123',
   action: 'transfer',
-  amount: 500,
+  amount: 500,              // optional — defaults to 0 for non-monetary actions
   recipient: 'bob@example.com',
   from: 'alice@example.com',
-  metadata: { orderId: 'ord_123' }, // optional — any JSON object
+  metadata: { orderId: 'ord_123' }, // optional — must be a JSON object, not a string
 })
 
 // Browser: prompt the user to sign with their passkey
@@ -201,14 +201,14 @@ try {
 ### `client.challenge`
 | Method | Description |
 |--------|-------------|
-| `challenge.start({ userId, action, amount, recipient, from?, metadata?, requireBiometric? })` | Start a challenge |
+| `challenge.start({ userId, action, amount?, recipient, from?, metadata?, requireBiometric? })` | Start a challenge. `amount` defaults to `0` if omitted — safe to omit for non-monetary actions. |
 | `challenge.verify(assertion)` | Verify the signed assertion |
 
 ### `client.agent`
 | Method | Description |
 |--------|-------------|
 | `agent.register({ agentId, publicKey })` | Register an agent's Ed25519 public key |
-| `agent.startChallenge({ agentId, action, amount, recipient, from?, metadata? })` | Start a challenge for an agent action |
+| `agent.startChallenge({ agentId, action, amount?, recipient, from?, metadata? })` | Start a challenge for an agent action. `amount` defaults to `0` if omitted. |
 | `agent.verify({ agentId, challenge, signature })` | Submit the signed challenge |
 
 ---

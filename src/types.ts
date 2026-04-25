@@ -33,7 +33,7 @@ export interface RegisterCompleteResponse {
 export interface ChallengeStartParams {
   userId: string
   action: string
-  amount: number
+  amount?: number
   recipient: string
   from?: string
   metadata?: Record<string, unknown>
@@ -76,7 +76,7 @@ export interface AgentRegisterResponse {
 export interface AgentChallengeStartParams {
   agentId: string
   action: string
-  amount: number
+  amount?: number
   recipient: string
   from?: string
   metadata?: Record<string, unknown>
