@@ -1,18 +1,18 @@
 # @fortsignal/sdk
 
-The official TypeScript SDK for [FortSignal](https://fortsignal.com) — intent verification infrastructure for agents and human-authorized actions.
+The official TypeScript SDK for [FortSignal](https://fortsignal.com) — a deterministic execution authorization and enforcement layer for agents and humans.
 
 **Full documentation:** [fortsignal.com/docs](https://fortsignal.com/docs)
 
 ## What it does
 
-FortSignal verifies that the exact parameters a user or agent approved are the same parameters that execute. Every sensitive action gets a fresh hardware-signed approval — cryptographically bound to the action, amount, recipient, and any other fields you define.
+FortSignal verifies that the exact parameters a user or agent approved are the same parameters that execute. Every action gets a fresh hardware-signed approval — cryptographically bound to the action, amount, recipient, and any other fields you define.
 
 ### Two separate layers
 
-**Intent fields** (`action`, `amount`, `recipient`, and optionally `from`, `metadata`) describe the specific action being requested. They are sent per-request and cryptographically signed — proof that the exact values were approved at that moment.
+**Action parameters** (`action`, `amount`, `recipient`, and optionally `from`, `metadata`) describe the specific action being requested. They are sent per-request and cryptographically signed — proof that the exact values were approved at that moment.
 
-**Policy** is separate. Policy profiles are persistent rules you configure once in your FortSignal dashboard and attach to users or agents. After the signature passes, FortSignal checks the intent field values against those rules — `allowedActions`, `maxAmountPerAction`, `allowedRecipients`. A valid signature is not enough on its own; if the action violates any policy constraint, FortSignal returns `decision: deny`.
+**Policy constraints** are separate. Policy profiles are persistent rules you configure once in your FortSignal dashboard and attach to users or agents. After the signature passes, FortSignal checks the action parameter values against those rules — `allowedActions`, `maxAmountPerAction`, `allowedRecipients`. A valid signature is not enough on its own; if the action violates any policy constraint, FortSignal returns `decision: deny`.
 
 For agents there is a third layer: the delegation must be active and not expired. All three must pass — valid signature, active delegation, within policy — for the decision to be `allow`.
 
@@ -69,7 +69,7 @@ await client.register.complete({
 })
 ```
 
-### Step 3 — Require approval before a sensitive action
+### Step 3 — Authorize an action
 
 ```typescript
 // Server: start a challenge before the action executes
