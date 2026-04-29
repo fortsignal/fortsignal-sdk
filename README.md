@@ -1,12 +1,28 @@
 # @fortsignal/sdk
 
-The official TypeScript SDK for [FortSignal](https://fortsignal.com) — You Approve the Action. We Enforce It.
+**Cryptographic proof that a specific action was authorized with specific parameters — not just that someone logged in.**
 
-Cryptographic authorization that binds every approval to the exact parameters that execute — for humans and AI agents.
+The official TypeScript SDK for [FortSignal](https://fortsignal.com). Works for humans and AI agents.
 
-**Full documentation:** [fortsignal.com/docs](https://fortsignal.com/docs)
+[**Live demo**](https://api.fortsignal.com/demo) · [**Docs**](https://api.fortsignal.com/docs) · [**fortsignal.com**](https://fortsignal.com)
 
-## What it does
+---
+
+## The problem
+
+Authentication proves who logged in. It doesn't prove what they authorized afterward. A stolen session token, a compromised server, or a rogue AI agent can execute any action with no further proof.
+
+FortSignal closes that gap. Every action requires a fresh hardware-backed signature bound to the exact parameters:
+
+```
+challenge = SHA-256(nonce : action : amount : recipient : from : metadata)
+```
+
+If any parameter changes after the user approves — including server-side tampering — verification returns `deny: parameters_tampered`. Patent pending April 2026.
+
+---
+
+## How it works
 
 FortSignal verifies that the exact parameters a user or agent approved are the same parameters that execute. Every action gets a fresh hardware-signed approval — cryptographically bound to the action, amount, recipient, and any other fields you define.
 
