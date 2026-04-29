@@ -1,6 +1,8 @@
 # @fortsignal/sdk
 
-The official TypeScript SDK for [FortSignal](https://fortsignal.com) — a deterministic execution authorization and enforcement layer for agents and humans.
+The official TypeScript SDK for [FortSignal](https://fortsignal.com) — You Approve the Action. We Enforce It.
+
+Cryptographic authorization that binds every approval to the exact parameters that execute — for humans and AI agents.
 
 **Full documentation:** [fortsignal.com/docs](https://fortsignal.com/docs)
 
@@ -8,7 +10,7 @@ The official TypeScript SDK for [FortSignal](https://fortsignal.com) — a deter
 
 FortSignal verifies that the exact parameters a user or agent approved are the same parameters that execute. Every action gets a fresh hardware-signed approval — cryptographically bound to the action, amount, recipient, and any other fields you define.
 
-### Two separate layers
+### Three separate layers
 
 **Action parameters** (`action`, `amount`, `recipient`, and optionally `from`, `metadata`) describe the specific action being requested. They are sent per-request and cryptographically signed — proof that the exact values were approved at that moment.
 
