@@ -139,22 +139,11 @@ await client.agent.register({
 // Agent now appears in your dashboard — assign a policy before it can act
 ```
 
-### Step 2 — Set a default policy (optional, via API)
+### Step 2 — Assign a policy (dashboard)
 
-If your agent always operates under the same policy, set it as the default so you don't have to select it every time you approve a delegation.
+Go to your [FortSignal dashboard](https://fortsignal.com/dashboard) and assign a policy to the agent. The policy defines allowed actions, amount caps, and approved recipients. Set an expiry for the delegation.
 
-```typescript
-// This endpoint requires dashboard auth — call it from your dashboard session, not your API key
-POST /agent/policy
-{ agentId: 'my-agent-01', policyId: 'pol_abc123' }
-// → { status: 'updated', agentId: 'my-agent-01', defaultPolicyId: 'pol_abc123' }
-```
-
-### Step 3 — Approve a delegation (dashboard)
-
-Go to your [FortSignal dashboard](https://fortsignal.com/dashboard), find the agent, and approve a delegation. Set an expiry. If the agent has a default policy, you only need to set the expiry — the policy is pre-filled. You can override it for any individual delegation.
-
-> Delegation requires owner passkey re-authentication and cannot be done via API key. This is intentional — a compromised API key cannot grant or revoke agent permissions.
+> Policy assignment requires owner authentication and cannot be done via API key. This is intentional — a compromised API key cannot grant or revoke agent permissions.
 
 ### Step 3 — Verify each agent action
 
@@ -254,8 +243,7 @@ Dashboard-auth endpoints (not callable via API key — use from your dashboard s
 
 | Endpoint | Description |
 |----------|-------------|
-| `POST /agent/policy` | Set a default policy on an agent. `policyId: null` clears it. |
-| `POST /agent/delegate` | Approve a delegation. `policyId` optional if agent has a default. |
+| `POST /agent/delegate` | Approve a delegation — pick a policy and set expiry. |
 | `POST /agent/revoke` | Revoke an agent's active delegation. |
 | `GET /agent/list` | List all agents and their delegation status. |
 
