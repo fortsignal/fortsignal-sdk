@@ -112,8 +112,13 @@ if (result.decision === 'allow') {
   await executeTransfer()
 } else {
   // result.reason — why it was denied:
-  // 'policy_expired' | 'action_not_allowed' | 'amount_exceeds_policy'
-  // 'recipient_not_allowed' | 'parameters_tampered' | 'invalid_challenge'
+  // 'policy_not_found'       — user has a record in /org/users but no policy assigned
+  // 'policy_expired'         — policy expiresAt has passed
+  // 'action_not_allowed'     — action not in policy allowedActions
+  // 'amount_exceeds_policy'  — amount over policy maxAmountPerAction
+  // 'recipient_not_allowed'  — recipient not in policy allowedRecipients
+  // 'parameters_tampered'    — params changed after challenge was issued
+  // 'invalid_challenge'      — expired or already used
   throw new Error(result.reason)
 }
 ```
@@ -134,11 +139,22 @@ await client.agent.register({
 // Agent now appears in your dashboard — assign a policy before it can act
 ```
 
-### Step 2 — Assign a policy (dashboard)
+### Step 2 — Set a default policy (optional, via API)
 
-Go to your [FortSignal dashboard](https://fortsignal.com/dashboard) and assign a policy to the agent. The policy defines allowed actions, amount caps, and approved recipients. Set an expiry for the delegation.
+If your agent always operates under the same policy, set it as the default so you don't have to select it every time you approve a delegation.
 
-> Policy assignment requires owner authentication and cannot be done via API key. This is intentional — a compromised API key cannot grant or revoke agent permissions.
+```typescript
+// This endpoint requires dashboard auth — call it from your dashboard session, not your API key
+POST /agent/policy
+{ agentId: 'my-agent-01', policyId: 'pol_abc123' }
+// → { status: 'updated', agentId: 'my-agent-01', defaultPolicyId: 'pol_abc123' }
+```
+
+### Step 3 — Approve a delegation (dashboard)
+
+Go to your [FortSignal dashboard](https://fortsignal.com/dashboard), find the agent, and approve a delegation. Set an expiry. If the agent has a default policy, you only need to set the expiry — the policy is pre-filled. You can override it for any individual delegation.
+
+> Delegation requires owner passkey re-authentication and cannot be done via API key. This is intentional — a compromised API key cannot grant or revoke agent permissions.
 
 ### Step 3 — Verify each agent action
 
@@ -171,8 +187,13 @@ if (result.decision === 'allow') {
   await executeAction()
 } else {
   // result.reason — why it was denied:
-  // 'delegation_invalid' | 'policy_expired' | 'action_not_allowed'
-  // 'amount_exceeds_policy' | 'recipient_not_allowed' | 'verification_failed'
+  // 'delegation_invalid'     — delegation revoked, expired, or never approved
+  // 'policy_not_found'       — agent has a delegation but the policy no longer exists
+  // 'policy_expired'         — policy expiresAt has passed
+  // 'action_not_allowed'     — action not in policy allowedActions
+  // 'amount_exceeds_policy'  — amount over policy maxAmountPerAction
+  // 'recipient_not_allowed'  — recipient not in policy allowedRecipients
+  // 'verification_failed'    — Ed25519 signature does not match registered key
 }
 ```
 
@@ -228,6 +249,15 @@ try {
 | `agent.register({ agentId, publicKey })` | Register an agent's Ed25519 public key |
 | `agent.startChallenge({ agentId, action, amount?, recipient, from?, metadata? })` | Start a challenge for an agent action. `amount` defaults to `0` if omitted. |
 | `agent.verify({ agentId, challenge, signature })` | Submit the signed challenge |
+
+Dashboard-auth endpoints (not callable via API key — use from your dashboard session):
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /agent/policy` | Set a default policy on an agent. `policyId: null` clears it. |
+| `POST /agent/delegate` | Approve a delegation. `policyId` optional if agent has a default. |
+| `POST /agent/revoke` | Revoke an agent's active delegation. |
+| `GET /agent/list` | List all agents and their delegation status. |
 
 ---
 
