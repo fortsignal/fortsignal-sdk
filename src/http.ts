@@ -7,12 +7,16 @@ export async function request<T>(
   path: string,
   body?: object,
 ): Promise<T> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+  }
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+  }
+
   const res = await fetch(`${baseUrl}${path}`, {
     method,
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers,
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
 

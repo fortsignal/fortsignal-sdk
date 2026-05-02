@@ -3,10 +3,11 @@ export interface FortSignalOptions {
   baseUrl?: string
 }
 
-// Register
+// Register — shapes match `POST /register/start` and `/register/complete`
 export interface RegisterStartParams {
   userId: string
-  username: string
+  /** `"passwords"` (platform) / `"authenticator"` (cross-platform key). Omit for browser default. */
+  saveMode?: 'passwords' | 'authenticator'
 }
 
 export interface RegisterStartResponse {
@@ -18,11 +19,11 @@ export interface RegisterStartResponse {
   attestation: string
 }
 
-export interface RegisterCompleteParams {
-  userId: string
-  challenge: string
-  attestation: object
-}
+/**
+ * Raw JSON returned by `@simplewebauthn/browser` `startRegistration()` — send unchanged.
+ * The API resolves `userId` from its nonce store using `response.clientDataJSON`.
+ */
+export type RegisterCompleteBody = Record<string, unknown>
 
 export interface RegisterCompleteResponse {
   status: string
@@ -59,6 +60,24 @@ export interface ChallengeVerifyResponse {
   action?: string
   amount?: number
   recipient?: string
+  from?: string
+  metadata?: unknown
+}
+
+/** Stored allow record from `GET /signal/:signalId` (matches verify-time payload; optional fields depend on human vs agent). */
+export interface SignalLookupResponse {
+  tenantId: string
+  verifiedAt: string
+  verifiedBy: 'human' | 'agent'
+  action: string
+  amount: number
+  recipient: string
+  userId?: string
+  agentId?: string
+  delegationId?: string
+  policyId?: string
+  from?: string
+  metadata?: unknown
 }
 
 // Agent
@@ -80,6 +99,8 @@ export interface AgentChallengeStartParams {
   recipient: string
   from?: string
   metadata?: Record<string, unknown>
+  /** Optional — must match the active delegation if provided (API validates). */
+  delegationId?: string
 }
 
 export interface AgentChallengeStartResponse {
@@ -106,6 +127,8 @@ export interface AgentVerifyResponse {
   action?: string
   amount?: number
   recipient?: string
+  from?: string
+  metadata?: unknown
 }
 
 export interface AgentRevokeParams {

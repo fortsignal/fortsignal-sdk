@@ -1,6 +1,7 @@
 import { RegisterResource } from './register'
 import { ChallengeResource } from './challenge'
 import { AgentResource } from './agent'
+import { SignalResource } from './signal'
 import type { FortSignalOptions } from './types'
 
 export { FortSignalError } from './types'
@@ -8,12 +9,13 @@ export type {
   FortSignalOptions,
   RegisterStartParams,
   RegisterStartResponse,
-  RegisterCompleteParams,
+  RegisterCompleteBody,
   RegisterCompleteResponse,
   ChallengeStartParams,
   ChallengeStartResponse,
   ChallengeVerifyParams,
   ChallengeVerifyResponse,
+  SignalLookupResponse,
   AgentRegisterParams,
   AgentRegisterResponse,
   AgentChallengeStartParams,
@@ -28,6 +30,7 @@ export class FortSignal {
   readonly register: RegisterResource
   readonly challenge: ChallengeResource
   readonly agent: AgentResource
+  readonly signal: SignalResource
 
   constructor(options: FortSignalOptions) {
     if (!options.apiKey) throw new Error('apiKey is required')
@@ -35,5 +38,6 @@ export class FortSignal {
     this.register = new RegisterResource(options.apiKey, base)
     this.challenge = new ChallengeResource(options.apiKey, base)
     this.agent = new AgentResource(options.apiKey, base)
+    this.signal = new SignalResource(options.apiKey, base)
   }
 }
