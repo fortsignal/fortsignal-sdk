@@ -88,11 +88,14 @@ Throws `FortSignalError` for HTTP failures (`err.code`, `err.status`). Missing o
 
 ## Agents
 
-Register the agent’s **public** key once (private key stays on your side):
+**Two ways to register an agent:**
+
+- **Dashboard (recommended):** Open [Agent Passports](https://fortsignal.com/dashboard) → **+ New Agent Passport**. Your browser generates the Ed25519 keypair — download the private key, then approve a delegation with your passkey. No code needed for setup.
+- **API (code-first):** Generate an Ed25519 keypair on your server and register the public key:
 
 ```typescript
 await client.agent.register({
-  agentId: 'my-agent-01',
+  agentId: ‘my-agent-01’,
   publicKey: agentPublicKeyBase64url,
 })
 ```
