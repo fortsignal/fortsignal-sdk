@@ -1,14 +1,15 @@
 # @fortsignal/sdk
 
-TypeScript client for **[FortSignal](https://fortsignal.com)** — register passkeys, run intent-bound challenges, verify humans or agents. Same API as **[api.fortsignal.com](https://api.fortsignal.com)**.
+![FortSignal Logo](https://raw.githubusercontent.com/fortsignal/fortsignal-sdk/main/fortsignal-logo.png)
 
-[Docs](https://api.fortsignal.com/docs) · [Demo](https://api.fortsignal.com/demo) · [API repo](https://github.com/fortsignal/fortsignal-api)
+**TypeScript client for FortSignal** — register passkeys, run intent-bound challenges, and verify humans or agents.
 
-FortSignal hashes your action fields (`action`, `amount`, `recipient`, …) and has the device or agent sign that hash. Change anything after approval → verification fails. Optional dashboard policies and agent delegations apply when you set them up.
+The SDK gives you the same API as `api.fortsignal.com`.  
+FortSignal hashes your action fields (`action`, `amount`, `recipient`, …) and has the device or agent sign that hash. Any change after approval → verification fails.
 
-```
-challenge = SHA-256(nonce : action : amount : recipient : from : metadata)
-```
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org/)
 
 ---
 
@@ -16,46 +17,20 @@ challenge = SHA-256(nonce : action : amount : recipient : from : metadata)
 
 ```bash
 npm install @fortsignal/sdk
-```
+For humans (WebAuthn in browser):
+Bashnpm install @simplewebauthn/browser
 
-Humans need WebAuthn in the browser:
-
-```bash
-npm install @simplewebauthn/browser
-```
-
-Agents sign with Ed25519 on the server only — no extra SDK beyond this package.
-
-Get a key after signup: [fortsignal.com/signup](https://fortsignal.com/signup) → `fs_live_...`
-
----
-
-## Humans
-
-```typescript
-import { FortSignal } from '@fortsignal/sdk'
+Quick Start
+Humans (passkey / WebAuthn)
+TypeScriptimport { FortSignal } from '@fortsignal/sdk'
 
 const client = new FortSignal({ apiKey: process.env.FORTSIGNAL_API_KEY! })
-```
-
-**Register once** (server starts options → browser creates passkey → server completes):
-
-```typescript
-const options = await client.register.start({
-  userId: 'user_123',
-  saveMode: 'passwords', // optional
-})
-
-import { startRegistration } from '@simplewebauthn/browser'
+Register once:
+TypeScriptconst options = await client.register.start({ userId: 'user_123' })
 const registrationJSON = await startRegistration({ optionsJSON: options })
-
 await client.register.complete(registrationJSON)
-```
-
-**Each sensitive action:**
-
-```typescript
-const options = await client.challenge.start({
+Every sensitive action:
+TypeScriptconst options = await client.challenge.start({
   userId: 'user_123',
   action: 'transfer',
   amount: 500,
@@ -64,108 +39,52 @@ const options = await client.challenge.start({
   metadata: { orderId: 'ord_123' },
 })
 
-import { startAuthentication } from '@simplewebauthn/browser'
 const assertion = await startAuthentication({ optionsJSON: options })
-
 const result = await client.challenge.verify(assertion)
 
 if (result.decision === 'allow') {
-  // result.signalId — log as receipt
+  console.log('✅ Allowed – signalId:', result.signalId)
 } else {
-  // result.reason — e.g. parameters_tampered, invalid_challenge, policy_*, …
+  console.log('❌ Denied – reason:', result.reason)
 }
-```
-
-**Optional:** if you only get a `signalId` back from the client, confirm it server-side:
-
-```typescript
-const stored = await client.signal.get(signalIdFromClient)
-```
-
-Throws `FortSignalError` for HTTP failures (`err.code`, `err.status`). Missing or wrong-tenant signals → `signal_not_found`; bad UUID → `invalid_signal_id`.
-
----
-
-## Agents
-
-**Two ways to register an agent:**
-
-- **Dashboard (recommended):** Open [Agent Passports](https://fortsignal.com/dashboard) → **+ New Agent Passport**. Your browser generates the Ed25519 keypair — download the private key, then approve a delegation with your passkey. No code needed for setup.
-- **API (code-first):** Generate an Ed25519 keypair on your server and register the public key:
-
-```typescript
-await client.agent.register({
-  agentId: ‘my-agent-01’,
+Agents (Ed25519 signing)
+Register via Dashboard (recommended) → Agent Passports → download key.
+Or via API:
+TypeScriptawait client.agent.register({
+  agentId: 'my-agent-01',
   publicKey: agentPublicKeyBase64url,
 })
-```
-
-Approve policy + delegation in the [dashboard](https://fortsignal.com/dashboard) (not available via API key — by design).
-
-**Each action:**
-
-```typescript
-const { challenge } = await client.agent.startChallenge({
+Sign & verify:
+TypeScriptconst { challenge } = await client.agent.startChallenge({
   agentId: 'my-agent-01',
   action: 'transfer',
   amount: 250,
   recipient: 'acct_456',
 })
 
-const challengeBytes = Buffer.from(challenge, 'base64url')
-const sigBytes = await crypto.subtle.sign('Ed25519', privateKey, challengeBytes)
+const sigBytes = await crypto.subtle.sign('Ed25519', privateKey, Buffer.from(challenge, 'base64url'))
 const signature = Buffer.from(sigBytes).toString('base64url')
 
-const result = await client.agent.verify({
-  agentId: 'my-agent-01',
-  challenge,
-  signature,
-})
-```
+const result = await client.agent.verify({ agentId: 'my-agent-01', challenge, signature })
 
----
+Errors
 
-## Errors
+decision: 'deny' is a normal response — check result.reason
+Real failures throw FortSignalError (with err.code and err.status)
 
-`decision: 'deny'` is a normal response — check `result.reason`.
 
-Auth, rate limits, and real HTTP failures throw **`FortSignalError`**:
+API Surface
 
-```typescript
-import { FortSignalError } from '@fortsignal/sdk'
+NamespaceMethodsclient.registerstart(), complete()client.challengestart(), verify()client.signalget(signalId)client.agentregister(), startChallenge(), verify()
+Full detail → api.fortsignal.com/docs
 
-try {
-  await client.challenge.start({ ... })
-} catch (err) {
-  if (err instanceof FortSignalError) {
-    console.error(err.code, err.status)
-  }
-}
-```
-
----
-
-## API surface
-
-| Namespace | Methods |
-|-----------|---------|
-| `client.register` | `start({ userId, saveMode? })`, `complete(registrationJSON)` |
-| `client.challenge` | `start(...)`, `verify(assertion)` |
-| `client.signal` | `get(signalId)` |
-| `client.agent` | `register(...)`, `startChallenge({ ..., delegationId? })`, `verify(...)` |
-
-Dashboard-only (session auth, not API key): `POST /agent/delegate`, `POST /agent/revoke`, `GET /agent/list`.
-
-Full detail: **[api.fortsignal.com/docs](https://api.fortsignal.com/docs)**
-
----
-
-## Requirements
+Requirements
 
 Node.js 18+
+TypeScript 5.x (optional)
 
----
 
-## License
+Made with ❤️ by the FortSignal team
+fortsignal.com · Dashboard
 
 MIT
