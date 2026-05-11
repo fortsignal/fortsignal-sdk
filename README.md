@@ -74,7 +74,11 @@ Real failures throw FortSignalError (with err.code and err.status)
 
 API Surface
 
-NamespaceMethodsclient.registerstart(), complete()client.challengestart(), verify()client.signalget(signalId)client.agentregister(), startChallenge(), verify()
+Namespace,Key Methods
+client.register,"start(), complete()"
+client.challenge,"start(), verify()"
+client.signal,get(signalId)
+client.agent,"register(), startChallenge(), verify()"
 Full detail → api.fortsignal.com/docs
 
 Requirements
