@@ -79,6 +79,7 @@ client.register,"start(), complete()"
 client.challenge,"start(), verify()"
 client.signal,get(signalId)
 client.agent,"register(), startChallenge(), verify()"
+
 Full detail → api.fortsignal.com/docs
 
 Requirements
