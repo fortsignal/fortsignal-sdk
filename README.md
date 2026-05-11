@@ -1,6 +1,5 @@
 # @fortsignal/sdk
 
-![FortSignal Logo](https://raw.githubusercontent.com/fortsignal/fortsignal-sdk/main/fortsignal-logo.png)
 
 **TypeScript client for FortSignal** — register passkeys, run intent-bound challenges, and verify humans or agents.
 
