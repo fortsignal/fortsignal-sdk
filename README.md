@@ -1,3 +1,7 @@
+# FortSignal GitHub READMEs - Clean Versions
+
+## 1. @fortsignal/sdk (TypeScript)
+
 # @fortsignal/sdk
 
 **TypeScript client for FortSignal** — register passkeys, run intent-bound challenges, and verify humans or agents.
@@ -19,18 +23,30 @@ npm install @fortsignal/sdk
 
 # For humans (WebAuthn in browser)
 npm install @simplewebauthn/browser
+```
 
-Quick Start
-Humans (passkey / WebAuthn)
-TypeScriptimport { FortSignal } from '@fortsignal/sdk'
+---
+
+## Quick Start
+
+### Humans (passkey / WebAuthn)
+
+```ts
+import { FortSignal } from '@fortsignal/sdk'
 
 const client = new FortSignal({ apiKey: process.env.FORTSIGNAL_API_KEY! })
-Register once
-TypeScriptconst options = await client.register.start({ userId: 'user_123' })
+```
+
+**Register once**
+```ts
+const options = await client.register.start({ userId: 'user_123' })
 const registrationJSON = await startRegistration({ optionsJSON: options })
 await client.register.complete(registrationJSON)
-Every sensitive action
-TypeScriptconst options = await client.challenge.start({
+```
+
+**Every sensitive action**
+```ts
+const options = await client.challenge.start({
   userId: 'user_123',
   action: 'transfer',
   amount: 500,
@@ -47,13 +63,20 @@ if (result.decision === 'allow') {
 } else {
   console.log('❌ Denied – reason:', result.reason)
 }
-Agents (Ed25519 signing)
-TypeScriptawait client.agent.register({
+```
+
+### Agents (Ed25519 signing)
+
+```ts
+await client.agent.register({
   agentId: 'my-agent-01',
   publicKey: agentPublicKeyBase64url,
 })
+```
+
 Sign & verify:
-TypeScriptconst { challenge } = await client.agent.startChallenge({
+```ts
+const { challenge } = await client.agent.startChallenge({
   agentId: 'my-agent-01',
   action: 'transfer',
   amount: 250,
@@ -64,27 +87,41 @@ const sigBytes = await crypto.subtle.sign('Ed25519', privateKey, Buffer.from(cha
 const signature = Buffer.from(sigBytes).toString('base64url')
 
 const result = await client.agent.verify({ agentId: 'my-agent-01', challenge, signature })
+```
 
-Errors
+---
 
-decision: 'deny' is a normal business response — check result.reason
-Real failures throw FortSignalError (with err.code and err.status)
+## Errors
 
-API Surface
+- `decision: 'deny'` is a **normal** business response — check `result.reason`
+- Real failures throw `FortSignalError` (with `err.code` and `err.status`)
 
-Namespace,Key Methods
-client.register,"start(), complete()"
-client.challenge,"start(), verify()"
-client.signal,get(signalId)
-client.agent,"register(), startChallenge(), verify()"
+---
 
-Requirements
+## API Surface
 
-Node.js 18+
-TypeScript 5.x (optional)
+| Namespace          | Key Methods                          |
+|--------------------|--------------------------------------|
+| `client.register`  | `start()`, `complete()`              |
+| `client.challenge` | `start()`, `verify()`                |
+| `client.signal`    | `get(signalId)`                      |
+| `client.agent`     | `register()`, `startChallenge()`, `verify()` |
 
+Full detail → [api.fortsignal.com/docs](https://api.fortsignal.com/docs)
 
-Made with ❤️ by the FortSignal team
-fortsignal.com • Dashboard
+---
 
+## Requirements
 
+- Node.js 18+
+- TypeScript 5.x (optional)
+
+---
+
+**Made with ❤️ by the FortSignal team**  
+[fortsignal.com](https://fortsignal.com) • [Dashboard](https://app.fortsignal.com)
+
+---
+
+**License**  
+MIT © FortSignal
