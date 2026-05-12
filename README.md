@@ -1,4 +1,3 @@
-# FortSignal GitHub READMEs - Clean Versions
 
 
 # @fortsignal/sdk
