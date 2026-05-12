@@ -1,6 +1,5 @@
 # FortSignal GitHub READMEs - Clean Versions
 
-## 1. @fortsignal/sdk (TypeScript)
 
 # @fortsignal/sdk
 
