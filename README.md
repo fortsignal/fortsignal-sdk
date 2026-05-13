@@ -1,7 +1,7 @@
 
 # @fortsignal/sdk
 
-TypeScript client for [FortSignal](https://fortsignal.com) — register passkeys, run intent-bound challenges, and verify humans or agents.
+TypeScript client for [FortSignal](https://fortsignal.com) — execution governance infrastructure. Cryptographic authorization before execution, deterministic policy enforcement, delegation-backed agent boundaries.
 
 FortSignal hashes your action fields (`action`, `amount`, `recipient`, …) and has the device or agent sign that hash. Any change after approval → verification fails.
 
