@@ -16,7 +16,7 @@ FortSignal hashes your action fields (`action`, `amount`, `recipient`, …) and 
 
 Get an API key at [fortsignal.com/signup](https://fortsignal.com/signup) → Dashboard → **API Keys**. Your key starts with `fs_live_`.
 
-For agents: register the public key below, then approve a delegation in the [dashboard](https://api.fortsignal.com/dashboard) — `challenge/start` and `verify` return `delegation_invalid` until a delegation is active.
+For agents: register the public key below, then approve a delegation in the [dashboard](https://www.fortsignal.com/login) — `challenge/start` and `verify` return `delegation_invalid` until a delegation is active.
 
 ---
 
@@ -94,7 +94,7 @@ await client.agent.register({
 })
 ```
 
-Then approve a delegation in the [dashboard](https://api.fortsignal.com/dashboard) before running actions.
+Then approve a delegation in the [dashboard](https://www.fortsignal.com/login) before running actions.
 
 **Every action:**
 
