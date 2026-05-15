@@ -155,5 +155,26 @@ Full detail → [api.fortsignal.com/docs](https://api.fortsignal.com/docs)
 
 ---
 
+---
+
+## Publishing (maintainers)
+
+**README or docs change only** — push to GitHub, do not publish to npm:
+```bash
+git commit -m "Update README"
+git push
+```
+
+**Code change** — bump version, tag, then publish:
+```bash
+npm version patch        # bumps package.json + creates git tag automatically
+git push && git push --tags
+npm publish
+```
+
+Never run `npm publish` for README-only changes. The npm version must reflect actual SDK code changes only.
+
+---
+
 **License**  
 MIT © FortSignal
