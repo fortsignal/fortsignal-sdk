@@ -3,7 +3,14 @@
 
 TypeScript client for [FortSignal](https://fortsignal.com) — execution governance infrastructure. Cryptographic authorization before execution, deterministic policy enforcement, delegation-backed agent boundaries.
 
-FortSignal hashes your action fields (`action`, `amount`, `recipient`, …) and has the device or agent sign that hash. Any change after approval → verification fails.
+FortSignal hashes your action fields (`action`, `amount`, `recipient`, `source`, `metadata`) and has the device or agent sign that hash. Any change after approval → verification fails.
+
+**Intent fields:**
+- `action` — what the agent/user is doing (`transfer`, `approve`, `deploy`)
+- `amount` — value involved, optional (default 0)
+- `recipient` — who receives (`acct_456`, `vendor_portal`)
+- `source` — optional context about where the request originates (`production-cluster`, `payment-service`, `us-east-1`). Not agent identity — that's proven by Ed25519 passport + delegation. Used with `allowedFromSources` policy constraint.
+- `metadata` — arbitrary key-value context (`{ platform: 'ACH', env: 'production' }`). Used with `requiredMetadata` policy constraint.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
@@ -62,8 +69,8 @@ const options = await client.challenge.start({
   action: 'transfer',
   amount: 500,
   recipient: 'bob@example.com',
-  source: 'alice@example.com',
-  metadata: { orderId: 'ord_123' },
+  source: 'payment-service',       // optional — matches allowedFromSources policy constraint
+  metadata: { orderId: 'ord_123' }, // optional — matches requiredMetadata policy constraint
 })
 
 // browser
