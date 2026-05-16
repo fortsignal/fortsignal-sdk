@@ -36,7 +36,7 @@ export interface ChallengeStartParams {
   action: string
   amount?: number
   recipient: string
-  from?: string
+  source?: string
   metadata?: Record<string, unknown>
   requireBiometric?: boolean
 }
@@ -60,7 +60,7 @@ export interface ChallengeVerifyResponse {
   action?: string
   amount?: number
   recipient?: string
-  from?: string
+  source?: string
   metadata?: unknown
 }
 
@@ -76,7 +76,7 @@ export interface SignalLookupResponse {
   agentId?: string
   delegationId?: string
   policyId?: string
-  from?: string
+  source?: string
   metadata?: unknown
 }
 
@@ -97,7 +97,7 @@ export interface AgentChallengeStartParams {
   action: string
   amount?: number
   recipient: string
-  from?: string
+  source?: string
   metadata?: Record<string, unknown>
   /** Optional — must match the active delegation if provided (API validates). */
   delegationId?: string
@@ -127,7 +127,7 @@ export interface AgentVerifyResponse {
   action?: string
   amount?: number
   recipient?: string
-  from?: string
+  source?: string
   metadata?: unknown
 }
 

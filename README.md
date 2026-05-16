@@ -62,7 +62,7 @@ const options = await client.challenge.start({
   action: 'transfer',
   amount: 500,
   recipient: 'bob@example.com',
-  from: 'alice@example.com',
+  source: 'alice@example.com',
   metadata: { orderId: 'ord_123' },
 })
 
