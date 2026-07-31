@@ -142,6 +142,44 @@ if (result.decision === 'allow') {
 
 ---
 
+## Behavior contract (2026-07 API hardening)
+
+Three API behaviors you must code against:
+
+**1. Registration is never idempotent.** Re-registering a user who already has a passkey fails — `register.start()` without `rotate` returns 409, and `register.complete()` throws `FortSignalError` with `code: 'credential_exists'`. Treat that as "already registered → verify." For lost devices, rotate explicitly:
+
+```typescript
+// Lost-device recovery — replaces the existing passkey (audit-logged)
+const options = await client.register.start({ userId: 'alice', rotate: true })
+```
+
+**2. Challenges are single-use on ANY verify attempt.** A challenge is consumed on the first `verify()` call regardless of outcome — allow, failed signature, policy deny, or quota. Any second call with the same payload returns `deny: invalid_challenge`, immediately and everywhere. On `invalid_challenge`, always start a fresh ceremony:
+
+```typescript
+let result = await client.challenge.verify(assertion)
+if (result.decision === 'deny' && result.reason === 'invalid_challenge') {
+  // Never retry the same payload — start over
+  const fresh = await client.challenge.start(params)
+  // ...collect a new signature, then verify
+}
+```
+
+Do not add retry logic around `verify()` — retries cannot succeed.
+
+**3. Re-registering an agent invalidates its delegation.** Call `agent.register()` once at provisioning, not on every service boot. Check the response:
+
+```typescript
+const res = await client.agent.register({ agentId, publicKey })
+if (res.delegationInvalidated) {
+  // Human must re-approve delegation in the dashboard before the agent can act
+  console.error('Agent delegation invalidated — re-delegate at fortsignal.com/dashboard')
+}
+```
+
+**Also note:** user-verification (biometric) strength is decided by your server-side policy. The `requireBiometric` param on `challenge.start()` can upgrade a ceremony to required, but a policy that requires biometric always enforces it — the client cannot downgrade.
+
+---
+
 ## API Surface
 
 | Namespace          | Key Methods                                  |

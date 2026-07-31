@@ -8,6 +8,13 @@ export interface RegisterStartParams {
   userId: string
   /** `"passwords"` (platform) / `"authenticator"` (cross-platform key). Omit for browser default. */
   saveMode?: 'passwords' | 'authenticator'
+  /**
+   * Explicit credential rotation (lost-device recovery). Registration is never
+   * idempotent: re-registering without `rotate` fails with 409 `credential_exists`.
+   * With `rotate: true`, the ceremony may replace the existing passkey.
+   * Rotations are recorded in the API's audit log.
+   */
+  rotate?: boolean
 }
 
 export interface RegisterStartResponse {
@@ -90,6 +97,13 @@ export interface AgentRegisterResponse {
   status: string
   agentId: string
   registeredAt: string
+  /**
+   * True when this registration overwrote an existing agent key and therefore
+   * invalidated the agent's active delegation. The agent cannot act until a
+   * human re-approves a delegation in the dashboard — surface this to the
+   * operator instead of continuing silently.
+   */
+  delegationInvalidated?: boolean
 }
 
 export interface AgentChallengeStartParams {
