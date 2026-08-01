@@ -23,6 +23,10 @@ FortSignal is designed so a full compromise of our side cannot impersonate your 
 - **Your edge / sandbox:** the SDK accepts a custom base URL — `new FortSignal({ apiKey, baseUrl })` or `FORTSIGNAL_API_URL`. Use this for staging environments and enterprise network boundaries.
 - **Sandbox → production:** develop against `fs_demo_key` (public sandbox tenant), then issue an `fs_live_` key from the dashboard for production. Same API, same behavior.
 
+### Infrastructure requirements — none
+
+FortSignal's storage and consistency layer (edge runtime, key-value stores, strongly-consistent objects, audit database) is **entirely internal to FortSignal**. Your organization does not need any of it — no specific cloud, edge platform, database, or key-value store. If your backend can make outbound HTTPS calls and keep a secret safe, you can integrate. The SDK runs on Node.js 18+; the raw API works from any language with HTTP and Ed25519 support.
+
 ## 3. Behavior contract (required reading)
 
 These are enforced API behaviors your integration must respect (full detail with code samples in the SDK README §"Behavior contract"):
