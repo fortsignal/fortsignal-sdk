@@ -19,8 +19,9 @@ FortSignal is designed so a full compromise of our side cannot impersonate your 
 
 ## 2. Deployment shapes
 
-- **SaaS (default):** SDK points at `https://api.fortsignal.com`. Nothing to host.
-- **Your edge / sandbox:** the SDK accepts a custom base URL — `new FortSignal({ apiKey, baseUrl })` or `FORTSIGNAL_API_URL`. Use this for staging environments and enterprise network boundaries.
+- **SaaS (default, available today):** SDK points at `https://api.fortsignal.com`. Nothing to host. This is the only deployment model that is live and documented today.
+- **Staging / proxy:** the SDK accepts a custom base URL — `new FortSignal({ apiKey, baseUrl })` or `FORTSIGNAL_API_URL` — for pointing at a staging environment or routing through your own proxy **to the hosted API**. This does not self-host FortSignal.
+- **Private Cloud (enterprise agreement):** the same service runs as a container inside your VPC — your endpoint, your storage, air-gap possible. Early access; contact hr@fortsignal.com.
 - **Sandbox → production:** develop against `fs_demo_key` (public sandbox tenant), then issue an `fs_live_` key from the dashboard for production. Same API, same behavior.
 
 ### Infrastructure requirements — none
