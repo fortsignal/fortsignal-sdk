@@ -190,6 +190,7 @@ if (res.delegationInvalidated) {
 | `client.agent`     | `register()`, `startChallenge()`, `verify()` |
 
 Full detail → [api.fortsignal.com/docs](https://api.fortsignal.com/docs)
+Enterprise integration guide → [ENTERPRISE.md](ENTERPRISE.md)
 
 ---
 
