@@ -47,7 +47,7 @@ These are enforced API behaviors your integration must respect (full detail with
 
 ## 5. Platform checklist (your side)
 
-Controls that live outside FortSignal's codebase — verify them in your own platform/edge configuration:
+**Recommended hardening for your own environment — not integration requirements.** Integrating the hosted API needs nothing beyond outbound HTTPS and safe key storage. If you operate your own backend and edge, review these controls:
 
 - **Transport:** HTTPS-only, HSTS, TLS 1.2+ minimum, DNSSEC, CAA records
 - **Edge:** WAF rules on API routes; bot protection that does NOT challenge passkey ceremony JavaScript
