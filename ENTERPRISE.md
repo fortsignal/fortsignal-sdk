@@ -45,7 +45,21 @@ These are enforced API behaviors your integration must respect (full detail with
 - **Receipts:** every allow returns `signalId` + `verifiedAt` + `verifiedBy` (+ `delegationId`/`policyId` for agents). Persist them with your transaction records — they are the audit link.
 - **Rate limiting:** per-tenant per-minute by tier; per-agent 1000 actions/hour, counted only after a valid signature.
 
-## 5. Platform checklist (your side)
+## 5. Multi-sig governance (M-of-N)
+
+For organizations that require quorum approval before an agent may act: delegation creation and modification support **M-of-N passkey signatures**. Runtime agent execution stays fast — single Ed25519 signature per action, no multi-sig overhead. Multi-sig applies to *governance only*.
+
+- **Model:** signers are email + passkey credentials on the org roster — no accounts or passwords required. The owner invites signers from the dashboard; each enrolls a passkey from a magic link.
+- **Flow:** a delegation starts as a `PENDING_APPROVAL` proposal. Each required signer approves by signing the proposal's frozen parameter hash with their passkey (hardware WebAuthn, user verification required). At threshold, the delegation flips `ACTIVE`.
+- **Solo = degenerate case:** `threshold: 1` activates instantly — solo developers and enterprise orgs use identical data structures and contracts. No SDK changes when scaling.
+- **Revocation stays instant:** any single signer kills a delegation immediately, effective at every edge. Creation requires quorum; destruction doesn't.
+- **Tamper protection:** every signer signs the same frozen parameter hash — any edit mid-collection invalidates all signatures (`parameters_tampered`).
+- **Auditability:** every proposal, signature, activation, and revocation is recorded in the hash-chained audit log with signer identity — the evidence trail a CISO or auditor expects.
+- **SDK surface:** `GET /agent/delegation/:id/status` returns `ACTIVE` / `PENDING_APPROVAL` (+ signed/required counts). The SDK checks a status string only — no signature logic client-side.
+
+Full API reference: [fortsignal.com/docs#multisig](https://fortsignal.com/docs#multisig).
+
+## 6. Platform checklist (your side)
 
 **Recommended hardening for your own environment — not integration requirements.** Integrating the hosted API needs nothing beyond outbound HTTPS and safe key storage. If you operate your own backend and edge, review these controls:
 
@@ -56,14 +70,14 @@ These are enforced API behaviors your integration must respect (full detail with
 - **Key custody:** agent private keys in a secrets manager (not env files, not repos); API keys rotated on suspicion of exposure
 - **Data residency:** confirm your edge/storage region settings if regulated
 
-## 6. Suggested rollout
+## 7. Suggested rollout
 
 1. Sandbox: register a test user + agent, run the full ceremony loop against `fs_demo_key`
 2. Staging: point the SDK at your staging base URL, enforce a test policy
 3. Production: issue `fs_live_` key, enroll users, approve delegations, wire `signalId` into your audit store
 4. Ongoing: key rotation runbook (90 days), lost-passkey rotation via `rotate: true`, periodic audit-chain verification
 
-## 7. References
+## 8. References
 
 - SDK behavior contract + examples: [github.com/fortsignal/fortsignal-sdk](https://github.com/fortsignal/fortsignal-sdk) (README)
 - API reference: [fortsignal.com/docs](https://fortsignal.com/docs)
