@@ -21,7 +21,7 @@ FortSignal hashes your action fields (`action`, `amount`, `recipient`, `source`,
 
 ## Before you start
 
-Get an API key at [fortsignal.com/signup](https://fortsignal.com/signup) → Dashboard → **API Keys**. Your key starts with `fs_live_`.
+Get an API key at [fortsignal.com/signup](https://fortsignal.com/signup) — free tier: enter your email, click the verification link we send you, and your key is shown once at claim (also later in Dashboard → **API Keys**). Your key starts with `fs_live_`.
 
 For agents: register the public key below, then approve a delegation in the [dashboard](https://www.fortsignal.com/login) — `challenge/start` and `verify` return `delegation_invalid` until a delegation is active.
 
@@ -92,6 +92,18 @@ if (result.decision === 'allow') {
 ## Agents (Ed25519 signing)
 
 **Register** (or use the dashboard):
+
+```typescript
+// Multi-sig teams: gate execution on delegation status before running.
+// Accepts an agentId, delegationId (del_…), or proposalId (prop_…).
+const del = await client.agent.delegationStatus('agent-01')
+if (del.status === 'ACTIVE') {
+  // run agent
+} else if (del.status === 'PENDING_APPROVAL') {
+  // pause / notify — waiting on signer approvals (del.signed of del.required)
+}
+// 'NONE' — no active or pending delegation for this id (404 maps to NONE, never throws)
+```
 
 ```ts
 // server
@@ -178,6 +190,8 @@ if (res.delegationInvalidated) {
 
 **Also note:** user-verification (biometric) strength is decided by your server-side policy. The `requireBiometric` param on `challenge.start()` can upgrade a ceremony to required, but a policy that requires biometric always enforces it — the client cannot downgrade.
 
+**Quota meters decisions, not just approvals.** Every governed decision counts against your monthly quota — allows **and** policy blocks (a block is a delivered verification with an audit receipt). Failed signatures and `invalid_challenge` replays are always free. At the cap, `quota_exceeded` takes precedence over policy deny reasons.
+
 ---
 
 ## API Surface
@@ -187,7 +201,7 @@ if (res.delegationInvalidated) {
 | `client.register`  | `start()`, `complete()`                      |
 | `client.challenge` | `start()`, `verify()`                        |
 | `client.signal`    | `get(signalId)`                              |
-| `client.agent`     | `register()`, `startChallenge()`, `verify()` |
+| `client.agent`     | `register()`, `startChallenge()`, `verify()`, `delegationStatus(id)` |
 
 Full detail → [api.fortsignal.com/docs](https://api.fortsignal.com/docs)
 Enterprise integration guide → [ENTERPRISE.md](ENTERPRISE.md)

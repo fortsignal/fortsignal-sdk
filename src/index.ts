@@ -22,6 +22,7 @@ export type {
   AgentChallengeStartResponse,
   AgentVerifyParams,
   AgentVerifyResponse,
+  DelegationStatusResponse,
 } from './types'
 
 const DEFAULT_BASE_URL = 'https://api.fortsignal.com'

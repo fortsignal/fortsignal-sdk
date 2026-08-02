@@ -190,3 +190,19 @@ export class FortSignalError extends Error {
     this.code = code
   }
 }
+
+/**
+ * Result of `GET /agent/delegation/:id/status`. The API accepts a delegationId
+ * (`del_…`), a proposalId (`prop_…`), or an agentId. `NONE` means no active or
+ * pending delegation exists for the id (the API's 404 is mapped, not thrown).
+ */
+export interface DelegationStatusResponse {
+  status: 'ACTIVE' | 'PENDING_APPROVAL' | 'NONE' | 'EXPIRED' | 'CANCELLED' | (string & {})
+  delegationId?: string
+  proposalId?: string
+  expiresAt?: string
+  /** Present on PENDING_APPROVAL — signatures collected so far. */
+  signed?: number
+  /** Present on PENDING_APPROVAL — signatures required to activate. */
+  required?: number
+}

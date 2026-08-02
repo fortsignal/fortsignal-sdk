@@ -78,3 +78,36 @@ describe('agent.register — delegationInvalidated visibility (F-11)', () => {
     expect(res.delegationInvalidated).toBe(true)
   })
 })
+
+describe('agent.delegationStatus — multi-sig polling (M-of-N)', () => {
+  it('GETs the status endpoint with the bearer token', async () => {
+    const fn = mockFetchOnce(200, { delegationId: 'del_1', status: 'ACTIVE', expiresAt: '2026-08-09T00:00:00Z' })
+    const fs = new FortSignal({ apiKey: API_KEY })
+    const res = await fs.agent.delegationStatus('test111')
+
+    const [url, init] = fn.mock.calls[0]
+    expect(url).toBe(`${BASE}/agent/delegation/test111/status`)
+    expect(init.method).toBe('GET')
+    expect(init.headers.Authorization).toBe(`Bearer ${API_KEY}`)
+    expect(res.status).toBe('ACTIVE')
+    expect(res.delegationId).toBe('del_1')
+  })
+
+  it('returns signed/required counts for a pending proposal', async () => {
+    mockFetchOnce(200, { proposalId: 'prop_1', status: 'PENDING_APPROVAL', signed: 1, required: 3 })
+    const fs = new FortSignal({ apiKey: API_KEY })
+    const res = await fs.agent.delegationStatus('prop_1')
+
+    expect(res.status).toBe('PENDING_APPROVAL')
+    expect(res.signed).toBe(1)
+    expect(res.required).toBe(3)
+  })
+
+  it('maps the API 404 to a NONE status instead of throwing', async () => {
+    mockFetchOnce(404, { status: 'NONE' })
+    const fs = new FortSignal({ apiKey: API_KEY })
+    const res = await fs.agent.delegationStatus('del_nonexistent')
+
+    expect(res.status).toBe('NONE')
+  })
+})
