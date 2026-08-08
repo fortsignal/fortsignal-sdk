@@ -108,6 +108,11 @@ describe('verifyArtifact', () => {
       .toEqual({ valid: false, error: 'artifact_unknown_kid' })
   })
 
+  it('does not throw on non-string input (emission fails open → artifact may be undefined)', async () => {
+    const verdict = await clientWithJwks(key.jwk).verifyArtifact(undefined as any, { expected: EXPECTED, seenStore: new MemorySeenStore() })
+    expect(verdict).toEqual({ valid: false, error: 'artifact_malformed' })
+  })
+
   it('throws when seenStore is missing', async () => {
     const claims = await fillParamsHash(validClaims(), EXPECTED)
     const token = await mint(key.jwk, key.pair, claims)

@@ -35,6 +35,9 @@ export async function verifyArtifact(
   artifact: string,
   options: VerifyArtifactOptions,
 ): Promise<ArtifactVerdict> {
+  // Emission fails open, so executors can legitimately receive undefined —
+  // a missing artifact must be a verdict, never a throw.
+  if (typeof artifact !== 'string' || !artifact) return { valid: false, error: 'artifact_malformed' }
   if (!options?.seenStore || typeof options.seenStore.claim !== 'function') {
     throw new Error('verifyArtifact requires a seenStore (replay protection is mandatory)')
   }

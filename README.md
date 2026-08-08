@@ -149,7 +149,7 @@ if (result.decision === 'allow') {
 
 ## Verifying execution artifacts
 
-Every `allow` from `challenge.verify()` / `agent.verify()` returns an `artifact` — an Ed25519-signed JWT proving FortSignal verified those exact parameters under this policy/delegation. Denies never carry one: **absence of an artifact IS the deny.** Executors verify it offline before acting:
+Every `allow` from `challenge.verify()` / `agent.verify()` returns an `artifact` — an Ed25519-signed JWT proving FortSignal verified those exact parameters under this policy/delegation. Denies never carry one: **absence of an artifact IS the deny.** In rare failure cases an `allow` may be returned without an `artifact` field (artifact emission fails open so a signing error never blocks a legitimate allow) — executors must treat a missing artifact exactly like a deny. Executors verify it offline before acting:
 
 ```ts
 const verdict = await client.verifyArtifact(result.artifact, {
