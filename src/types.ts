@@ -69,6 +69,8 @@ export interface ChallengeVerifyResponse {
   recipient?: string
   source?: string
   metadata?: unknown
+  /** Ed25519-signed execution artifact (JWT) — present on allow decisions. */
+  artifact?: string
 }
 
 /** Stored allow record from `GET /signal/:signalId` (matches verify-time payload; optional fields depend on human vs agent). */
@@ -143,6 +145,8 @@ export interface AgentVerifyResponse {
   recipient?: string
   source?: string
   metadata?: unknown
+  /** Ed25519-signed execution artifact (JWT) — present on allow decisions. */
+  artifact?: string
 }
 
 export interface AgentRevokeParams {
@@ -205,4 +209,54 @@ export interface DelegationStatusResponse {
   signed?: number
   /** Present on PENDING_APPROVAL — signatures required to activate. */
   required?: number
+}
+
+// Execution artifact verification (Task 6)
+export type SeenStore = {
+  /** Atomic check-and-mark. Returns true if this jti was NOT seen before. */
+  claim(jti: string, expEpochSeconds: number): Promise<boolean>
+}
+
+export type ArtifactClaims = {
+  iss: string
+  sub: string
+  jti: string
+  iat: number
+  nbf: number
+  exp: number
+  act?: { typ: 'agent'; id: string }
+  fs: {
+    v: 1
+    verifiedBy: 'human' | 'agent'
+    userId?: string
+    delegationId?: string
+    policyId?: string
+    intentNonce: string
+    paramsHash: string
+    action: string
+    recipient: string
+    amount?: number
+    source?: string
+  }
+}
+
+export type ArtifactErrorCode =
+  | 'artifact_malformed' | 'artifact_alg_rejected' | 'artifact_unknown_kid'
+  | 'artifact_bad_signature' | 'artifact_expired' | 'artifact_not_yet_valid'
+  | 'artifact_issuer_mismatch' | 'artifact_params_mismatch' | 'artifact_replayed'
+  | 'artifact_store_unavailable' | 'artifact_keys_unavailable'
+
+export type ArtifactVerdict =
+  | { valid: true; claims: ArtifactClaims }
+  | { valid: false; error: ArtifactErrorCode }
+
+export type VerifyArtifactOptions = {
+  expected: {
+    action: string
+    recipient: string
+    amount?: number
+    source?: string
+    metadata?: Record<string, unknown>
+  }
+  seenStore: SeenStore
 }
