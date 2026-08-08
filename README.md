@@ -147,6 +147,40 @@ if (result.decision === 'allow') {
 
 ---
 
+## Verifying execution artifacts
+
+Every `allow` from `challenge.verify()` / `agent.verify()` returns an `artifact` — an Ed25519-signed JWT proving FortSignal verified those exact parameters under this policy/delegation. Denies never carry one: **absence of an artifact IS the deny.** Executors verify it offline before acting:
+
+```ts
+const verdict = await client.verifyArtifact(result.artifact, {
+  expected: { action, recipient, amount, source, metadata },
+  seenStore: redisSeenStore,   // SET NX PX — see below
+})
+if (!verdict.valid) throw new Error(`Not authorized: ${verdict.error}`)
+await execute(action)
+```
+
+**One-shot guarantee.** Replay protection is mandatory — `verifyArtifact` throws without a `seenStore`. Each artifact `jti` can be claimed exactly once; a second verifier gets `{ valid: false, error: 'artifact_replayed' }`.
+
+**`MemorySeenStore` is single-process only** — fine for dev, never for production. Multi-instance executors MUST use a shared store; the production pattern is Redis `SET fs:seen:{jti} 1 NX PX {ttlMs}` (the claim succeeds only when the command returns OK). The `SeenStore` interface is exported for exactly this:
+
+```ts
+import { MemorySeenStore } from '@fortsignal/sdk'   // dev / single-process only
+import type { SeenStore } from '@fortsignal/sdk'    // implement over Redis for production
+
+const seenStore: SeenStore = {
+  async claim(jti, expEpochSeconds) {
+    const ttlMs = expEpochSeconds * 1000 - Date.now()
+    const res = await redis.set(`fs:seen:${jti}`, '1', 'PX', ttlMs, 'NX')
+    return res === 'OK'
+  },
+}
+```
+
+For high-value actions, add the consume step — `POST /artifact/consume` re-checks revocation at consume time and guarantees one-shot even against the seen-store window. Full spec (canonicalization, golden vector, all eleven error codes) → [api.fortsignal.com/docs#execution-artifacts](https://api.fortsignal.com/docs#execution-artifacts)
+
+---
+
 ## Errors
 
 - `decision: 'deny'` is a normal response — check `result.reason`
@@ -202,6 +236,7 @@ if (res.delegationInvalidated) {
 | `client.challenge` | `start()`, `verify()`                        |
 | `client.signal`    | `get(signalId)`                              |
 | `client.agent`     | `register()`, `startChallenge()`, `verify()`, `delegationStatus(id)` |
+| `client.verifyArtifact` | `verifyArtifact(artifact, options)` — offline artifact verification |
 
 Full detail → [api.fortsignal.com/docs](https://api.fortsignal.com/docs)
 Enterprise integration guide → [ENTERPRISE.md](ENTERPRISE.md)
