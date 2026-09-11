@@ -260,3 +260,15 @@ export type VerifyArtifactOptions = {
   }
   seenStore: SeenStore
 }
+
+// Server-side consume (Track A.3). A 409 is a typed business deny, never an
+// error — the API evolves reasons over time, hence the escape hatch.
+export type ConsumeArtifactReason =
+  | 'already_consumed'
+  | 'artifact_revoked'
+  | ArtifactErrorCode
+  | (string & {})
+
+export type ConsumeArtifactResponse =
+  | { consumed: true }
+  | { consumed: false; reason: ConsumeArtifactReason }

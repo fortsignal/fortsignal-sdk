@@ -111,3 +111,44 @@ describe('agent.delegationStatus — multi-sig polling (M-of-N)', () => {
     expect(res.status).toBe('NONE')
   })
 })
+
+// ── consumeArtifact — server-side enforcement (Track A.3) ──
+
+describe('consumeArtifact — one-shot enforcement point', () => {
+  it('POSTs the artifact with the bearer token and maps 200 to consumed', async () => {
+    const fn = mockFetchOnce(200, { consumed: true })
+    const fs = new FortSignal({ apiKey: API_KEY })
+    const res = await fs.consumeArtifact('artifact_jwt')
+
+    expect(res).toEqual({ consumed: true })
+    const [url, init] = fn.mock.calls[0]
+    expect(url).toBe(`${BASE}/artifact/consume`)
+    expect(init.method).toBe('POST')
+    expect(init.headers.Authorization).toBe(`Bearer ${API_KEY}`)
+    expect(JSON.parse(init.body)).toEqual({ artifact: 'artifact_jwt' })
+  })
+
+  it('maps 409 to a typed business deny instead of throwing', async () => {
+    mockFetchOnce(409, { consumed: false, reason: 'already_consumed' })
+    const fs = new FortSignal({ apiKey: API_KEY })
+
+    expect(await fs.consumeArtifact('artifact_jwt')).toEqual({ consumed: false, reason: 'already_consumed' })
+  })
+
+  it('passes the revocation reason through untouched', async () => {
+    mockFetchOnce(409, { consumed: false, reason: 'artifact_revoked' })
+    const fs = new FortSignal({ apiKey: API_KEY })
+
+    expect(await fs.consumeArtifact('artifact_jwt')).toEqual({ consumed: false, reason: 'artifact_revoked' })
+  })
+
+  it('throws FortSignalError on server errors — a failed consume aborts', async () => {
+    mockFetchOnce(500, { error: 'internal' })
+    const fs = new FortSignal({ apiKey: API_KEY })
+
+    const err = await fs.consumeArtifact('artifact_jwt').catch(e => e)
+    expect(err).toBeInstanceOf(FortSignalError)
+    expect(err.status).toBe(500)
+    expect(err.code).toBe('internal')
+  })
+})

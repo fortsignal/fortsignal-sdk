@@ -177,7 +177,38 @@ const seenStore: SeenStore = {
 }
 ```
 
-For high-value actions, add the consume step — `POST /artifact/consume` re-checks revocation at consume time and guarantees one-shot even against the seen-store window. Full spec (canonicalization, golden vector, all eleven error codes) → [api.fortsignal.com/docs#execution-artifacts](https://api.fortsignal.com/docs#execution-artifacts)
+For high-value actions, add the consume step — `client.consumeArtifact()` re-checks revocation and the policy version server-side at consume time and guarantees one-shot even against the seen-store window. Full spec (canonicalization, golden vector, all eleven error codes) → [api.fortsignal.com/docs#execution-artifacts](https://api.fortsignal.com/docs#execution-artifacts)
+
+---
+
+## Consuming execution artifacts (server-side enforcement)
+
+Offline `verifyArtifact()` proves the artifact is intact. The server-side consume is the enforcement point: it re-checks revocation markers and the policy version in one atomic operation, then burns the `jti` on first use. A consumed artifact can never be used twice; a revoked one can never be used at all, even if revocation landed between issuance and execution:
+
+```ts
+const result = await client.consumeArtifact(artifact)
+if (!result.consumed) {
+  throw new Error(`Not authorized: ${result.reason}`)   // never retry — the jti is burned
+}
+await execute(action)
+```
+
+**200 → `{ consumed: true }`** — this caller won the first-use claim; go.
+
+**409 → typed deny, never a throw** — `{ consumed: false, reason }`:
+
+| `reason` | Meaning |
+|---|---|
+| `already_consumed` | This `jti` was claimed before |
+| `artifact_revoked` | Delegation or policy revoked at consume time, or the stamped policy epoch is stale (2026-09 policy-version binding) |
+| `artifact_invalid` | Malformed, wrong tenant, or missing required claims |
+| `artifact_expired` | Past its 60s–300s TTL at consume time |
+
+Code against `consumed`, not an allowlist of reasons — other 409 reasons (e.g. `artifact_bad_signature`) pass through as-is.
+
+**5xx / transport failures throw `FortSignalError`** — these are not business outcomes; a failed consume should abort the action, not proceed.
+
+**Order:** verify offline first (integrity + your params), consume immediately before executing. Consume authenticates with your API key and anchors the execution in FortSignal's audit chain.
 
 ---
 
@@ -237,6 +268,7 @@ if (res.delegationInvalidated) {
 | `client.signal`    | `get(signalId)`                              |
 | `client.agent`     | `register()`, `startChallenge()`, `verify()`, `delegationStatus(id)` |
 | `client.verifyArtifact` | `verifyArtifact(artifact, options)` — offline artifact verification |
+| `client.consumeArtifact` | `consumeArtifact(artifact)` — server-side consume with revocation + policy-epoch recheck |
 
 Full detail → [api.fortsignal.com/docs](https://api.fortsignal.com/docs)
 Enterprise integration guide → [ENTERPRISE.md](ENTERPRISE.md)
