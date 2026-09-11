@@ -245,6 +245,8 @@ Omitting `mandateId` when the artifact was minted under one (or passing one when
 
 **Revocation:** revoking a mandate fails outstanding artifacts closed — the consume burns them with `artifact_revoked` (same as a revoked delegation), and the mandate disappears from the live list.
 
+**Retries:** enterprise intake is retry-safe — a duplicate mandate id returns 409 `mandate_exists` and never overwrites (same contract as registration's `credential_exists`). Dashboard create mints a fresh id per passkey ceremony; a deliberate change is revoke + create, never an update.
+
 ---
 
 ## Errors
