@@ -33,9 +33,11 @@ function validClaims(overrides: any = {}) {
 
 // Must mirror the server canonicalization EXACTLY:
 // SHA-256(`${intentNonce}:${action}:${String(amount)}:${recipient}:${source}:${metadataStr}`)
+// + `:${mandateId}` when the action ran under a mandate (Track B)
 async function fillParamsHash(claims: any, expected: any) {
   const metadataStr = expected.metadata ? JSON.stringify(expected.metadata) : ''
   const payload = `${claims.fs.intentNonce}:${expected.action}:${String(expected.amount ?? 0)}:${expected.recipient}:${expected.source ?? ''}:${metadataStr}`
+    + (expected.mandateId ? `:${expected.mandateId}` : '')
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload))
   claims.fs.paramsHash = b64u(new Uint8Array(hash))
   return claims
@@ -70,6 +72,33 @@ describe('verifyArtifact', () => {
       expected: { ...EXPECTED, amount: 99999 }, seenStore: new MemorySeenStore(),
     })
     expect(verdict).toEqual({ valid: false, error: 'artifact_params_mismatch' })
+  })
+
+  // ── Mandate binding (Track B) — the mandateId joins the params hash ──
+
+  it('accepts a mandate-bound artifact when the same mandateId is expected', async () => {
+    const expected = { ...EXPECTED, mandateId: 'man_0123456789abcdef' }
+    const claims = await fillParamsHash(validClaims({ fs: { ...validClaims().fs, mandateId: expected.mandateId, mandateHash: 'mh' } }), expected)
+    const token = await mint(key.jwk, key.pair, claims)
+    const verdict = await clientWithJwks(key.jwk).verifyArtifact(token, { expected, seenStore: new MemorySeenStore() })
+    expect(verdict.valid).toBe(true)
+  })
+
+  it('rejects a mandate-bound artifact when no mandateId is expected (fail closed)', async () => {
+    const expected = { ...EXPECTED, mandateId: 'man_0123456789abcdef' }
+    const claims = await fillParamsHash(validClaims({ fs: { ...validClaims().fs, mandateId: expected.mandateId } }), expected)
+    const token = await mint(key.jwk, key.pair, claims)
+    // Executor did not request a mandate — the hash must not match
+    expect(await clientWithJwks(key.jwk).verifyArtifact(token, { expected: EXPECTED, seenStore: new MemorySeenStore() }))
+      .toEqual({ valid: false, error: 'artifact_params_mismatch' })
+  })
+
+  it('rejects a mandate-free artifact when a mandateId is expected', async () => {
+    const claims = await fillParamsHash(validClaims(), EXPECTED)
+    const token = await mint(key.jwk, key.pair, claims)
+    expect(await clientWithJwks(key.jwk).verifyArtifact(token, {
+      expected: { ...EXPECTED, mandateId: 'man_0123456789abcdef' }, seenStore: new MemorySeenStore(),
+    })).toEqual({ valid: false, error: 'artifact_params_mismatch' })
   })
 
   it('rejects replay (second claim on same jti)', async () => {

@@ -112,6 +112,41 @@ describe('agent.delegationStatus — multi-sig polling (M-of-N)', () => {
   })
 })
 
+// ── mandate pass-through (Track B) ──
+
+describe('agent challenge — mandateId pass-through', () => {
+  it('passes mandateId through startChallenge and omits it when absent', async () => {
+    const fn = mockFetchOnce(200, { challenge: 'c', agentId: 'a1', delegationId: 'del_1', expiresIn: 300, mandateId: 'man_0123456789abcdef' })
+    const fs = new FortSignal({ apiKey: API_KEY })
+    const res = await fs.agent.startChallenge({ agentId: 'a1', action: 'execute', recipient: 'cmd:x', mandateId: 'man_0123456789abcdef' })
+
+    const [, init] = fn.mock.calls[0]
+    expect(JSON.parse(init.body).mandateId).toBe('man_0123456789abcdef')
+    expect(res.mandateId).toBe('man_0123456789abcdef')
+  })
+
+  it('omits mandateId from the start body when not requested', async () => {
+    const fn = mockFetchOnce(200, { challenge: 'c', agentId: 'a1', delegationId: 'del_1', expiresIn: 300 })
+    const fs = new FortSignal({ apiKey: API_KEY })
+    await fs.agent.startChallenge({ agentId: 'a1', action: 'execute', recipient: 'cmd:x' })
+
+    const [, init] = fn.mock.calls[0]
+    expect(JSON.parse(init.body)).not.toHaveProperty('mandateId')
+  })
+
+  it('passes mandateId through verify and exposes mandateId/mandateHash on allow', async () => {
+    mockFetchOnce(200, {
+      decision: 'allow', verifiedBy: 'agent', mandateId: 'man_0123456789abcdef',
+      mandateHash: 'mh123', artifact: 'jwt',
+    })
+    const fs = new FortSignal({ apiKey: API_KEY })
+    const res = await fs.agent.verify({ agentId: 'a1', challenge: 'c', signature: 's', mandateId: 'man_0123456789abcdef' })
+
+    expect(res.mandateId).toBe('man_0123456789abcdef')
+    expect(res.mandateHash).toBe('mh123')
+  })
+})
+
 // ── consumeArtifact — server-side enforcement (Track A.3) ──
 
 describe('consumeArtifact — one-shot enforcement point', () => {

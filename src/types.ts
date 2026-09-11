@@ -117,6 +117,13 @@ export interface AgentChallengeStartParams {
   metadata?: Record<string, unknown>
   /** Optional — must match the active delegation if provided (API validates). */
   delegationId?: string
+  /**
+   * Optional authority envelope (mandate). The API binds it into the signed
+   * challenge hash at start — the same id MUST be passed to `verify()`, and
+   * the mandate must be active and bound to the delegation's policy or the
+   * verify is denied (`mandate_revoked` / `mandate_expired` / `mandate_policy_mismatch`).
+   */
+  mandateId?: string
 }
 
 export interface AgentChallengeStartResponse {
@@ -124,12 +131,16 @@ export interface AgentChallengeStartResponse {
   agentId: string
   delegationId: string
   expiresIn: number
+  /** Echoed when a mandateId was supplied at start. */
+  mandateId?: string
 }
 
 export interface AgentVerifyParams {
   agentId: string
   challenge: string
   signature: string
+  /** Must equal the mandateId passed to `startChallenge()` (API denies a mismatch). */
+  mandateId?: string
 }
 
 export interface AgentVerifyResponse {
@@ -145,6 +156,10 @@ export interface AgentVerifyResponse {
   recipient?: string
   source?: string
   metadata?: unknown
+  /** Present on mandate-bound allows — echo of the bound mandate id. */
+  mandateId?: string
+  /** Canonical mandate hash at issuance — stamped into the artifact and rechecked at consume. */
+  mandateHash?: string
   /** Ed25519-signed execution artifact (JWT) — present on allow decisions. */
   artifact?: string
 }
@@ -231,6 +246,12 @@ export type ArtifactClaims = {
     userId?: string
     delegationId?: string
     policyId?: string
+    /** Policy version at issuance — the server rechecks it atomically at consume. */
+    policyEpoch?: number
+    /** Mandate envelope (Track B) — present when the action ran under a mandate. */
+    mandateId?: string
+    /** Canonical mandate hash at issuance — compared against the live mandate at consume. */
+    mandateHash?: string
     intentNonce: string
     paramsHash: string
     action: string
@@ -257,6 +278,13 @@ export type VerifyArtifactOptions = {
     amount?: number
     source?: string
     metadata?: Record<string, unknown>
+    /**
+     * The mandateId this action ran under, when one was supplied to
+     * `agent.startChallenge()`. It joins the params-hash binding: an artifact
+     * minted under a mandate fails `artifact_params_mismatch` here unless the
+     * same mandateId is passed — and vice versa.
+     */
+    mandateId?: string
   }
   seenStore: SeenStore
 }

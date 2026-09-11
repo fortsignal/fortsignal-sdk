@@ -200,7 +200,7 @@ await execute(action)
 | `reason` | Meaning |
 |---|---|
 | `already_consumed` | This `jti` was claimed before |
-| `artifact_revoked` | Delegation or policy revoked at consume time, or the stamped policy epoch is stale (2026-09 policy-version binding) |
+| `artifact_revoked` | Delegation, policy, or mandate revoked at consume time, or the stamped policy epoch / mandate hash is stale (2026-09 policy-version + mandate binding) |
 | `artifact_invalid` | Malformed, wrong tenant, or missing required claims |
 | `artifact_expired` | Past its 60s–300s TTL at consume time |
 
@@ -209,6 +209,41 @@ Code against `consumed`, not an allowlist of reasons — other 409 reasons (e.g.
 **5xx / transport failures throw `FortSignalError`** — these are not business outcomes; a failed consume should abort the action, not proceed.
 
 **Order:** verify offline first (integrity + your params), consume immediately before executing. Consume authenticates with your API key and anchors the execution in FortSignal's audit chain.
+
+---
+
+## Mandates (optional authority envelope)
+
+A mandate is an optional outer layer of authority over a policy — a named, expirable, individually revocable envelope ("Q3 Vendor Payout Authority") created in the dashboard (passkey-gated) or signed into existence by a registered enterprise issuer. Agent actions may run under one by passing `mandateId` through the challenge flow:
+
+```ts
+const start = await client.agent.startChallenge({
+  agentId, action, recipient,
+  mandateId: 'man_0123456789abcdef',          // optional
+})
+// ...sign `start.challenge` as usual...
+
+const result = await client.agent.verify({
+  agentId, challenge: start.challenge, signature,
+  mandateId: 'man_0123456789abcdef',          // must equal the start value
+})
+```
+
+- The mandate must be **active** and **bound to the delegation's policy** — otherwise verify is denied (`mandate_revoked`, `mandate_expired`, `mandate_policy_mismatch`).
+- `mandateId` is bound into the signed challenge hash at start, so it cannot be swapped between start and verify. The allow response echoes `mandateId` + `mandateHash` (the mandate's canonical hash at issuance).
+
+**Artifact binding:** the mandate joins the params hash, so offline verification must expect it:
+
+```ts
+const verdict = await client.verifyArtifact(result.artifact, {
+  expected: { action, recipient, mandateId: 'man_0123456789abcdef' },
+  seenStore,
+})
+```
+
+Omitting `mandateId` when the artifact was minted under one (or passing one when it wasn't) fails `artifact_params_mismatch` — in both directions, fail closed.
+
+**Revocation:** revoking a mandate fails outstanding artifacts closed — the consume burns them with `artifact_revoked` (same as a revoked delegation), and the mandate disappears from the live list.
 
 ---
 

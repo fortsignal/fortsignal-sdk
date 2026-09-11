@@ -21,9 +21,12 @@ type JwksCache = { keys: any[]; expiresAt: number }
 
 // Server canonicalization — docs/golden vectors pin this exact form:
 // SHA-256(`${intentNonce}:${action}:${String(amount)}:${recipient}:${source}:${metadataStr}`)
+// + `:${mandateId}` when the action ran under a mandate (Track B — the API
+// appends the same trailing field; mismatch in either direction fails binding).
 async function computeParamsHash(intentNonce: string, expected: VerifyArtifactOptions['expected']): Promise<string> {
   const metadataStr = expected.metadata ? JSON.stringify(expected.metadata) : ''
   const payload = `${intentNonce}:${expected.action}:${String(expected.amount ?? 0)}:${expected.recipient}:${expected.source ?? ''}:${metadataStr}`
+    + (expected.mandateId ? `:${expected.mandateId}` : '')
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload))
   return toBase64Url(new Uint8Array(hash))
 }
