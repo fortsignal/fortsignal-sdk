@@ -2,12 +2,13 @@ import { RegisterResource } from './register'
 import { ChallengeResource } from './challenge'
 import { AgentResource } from './agent'
 import { SignalResource } from './signal'
-import { verifyArtifact, MemorySeenStore } from './artifact'
+import { verifyArtifact, MemorySeenStore, seenRetentionMs, DEFAULT_ARTIFACT_ISSUER } from './artifact'
+import type { JwksState } from './artifact'
 import { FortSignalError } from './types'
 import type { FortSignalOptions, VerifyArtifactOptions, ArtifactVerdict, ConsumeArtifactResponse } from './types'
 
 export { FortSignalError } from './types'
-export { MemorySeenStore }
+export { MemorySeenStore, seenRetentionMs }
 export type {
   FortSignalOptions,
   RegisterStartParams,
@@ -43,15 +44,19 @@ export class FortSignal {
   readonly agent: AgentResource
   readonly signal: SignalResource
 
-  private jwksCache: { keys: any[]; expiresAt: number } | null = null
+  private readonly jwksState: JwksState = { cache: null, inflight: null }
   private readonly baseUrl: string
   private readonly apiKey: string
+  private readonly issuer: string
 
   constructor(options: FortSignalOptions) {
     if (!options.apiKey) throw new Error('apiKey is required')
     const base = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '')
     this.baseUrl = base
     this.apiKey = options.apiKey
+    this.issuer = typeof options.issuer === 'string' && options.issuer.length > 0
+      ? options.issuer
+      : DEFAULT_ARTIFACT_ISSUER
     this.register = new RegisterResource(options.apiKey, base)
     this.challenge = new ChallengeResource(options.apiKey, base)
     this.agent = new AgentResource(options.apiKey, base)
@@ -59,7 +64,7 @@ export class FortSignal {
   }
 
   verifyArtifact(artifact: string, options: VerifyArtifactOptions): Promise<ArtifactVerdict> {
-    return verifyArtifact(this.baseUrl, this.jwksCache, (c) => { this.jwksCache = c }, artifact, options)
+    return verifyArtifact(this.baseUrl, this.jwksState, artifact, options, this.issuer)
   }
 
   // Server-side enforcement point: re-checks revocation + policy version in

@@ -1,6 +1,14 @@
 export interface FortSignalOptions {
   apiKey: string
   baseUrl?: string
+  /**
+   * Expected `iss` on execution artifacts. Defaults to
+   * `https://api.fortsignal.com`. Set this for a self-hosted or private-cloud
+   * deployment; a custom `baseUrl` alone does not change the issuer (a proxy
+   * in front of the hosted API still issues hosted artifacts).
+   * Matched exactly — no trailing-slash normalization.
+   */
+  issuer?: string
 }
 
 // Register — shapes match `POST /register/start` and `/register/complete`
@@ -228,13 +236,28 @@ export interface DelegationStatusResponse {
 
 // Execution artifact verification (Task 6)
 export type SeenStore = {
-  /** Atomic check-and-mark. Returns true if this jti was NOT seen before. */
-  claim(jti: string, expEpochSeconds: number): Promise<boolean>
+  /**
+   * Atomic check-and-mark. Returns true if this jti was NOT seen before.
+   *
+   * `retainUntilEpochSeconds` is the last unix second the verifier will still
+   * accept the artifact (`exp` + the 30s clock skew), not the raw `exp`.
+   * The id must stay claimed through that whole second. Evicting at `exp`
+   * forgets it while verification still succeeds, so the same artifact can
+   * be accepted twice. `seenRetentionMs` is the Redis `PX` for that deadline.
+   */
+  claim(jti: string, retainUntilEpochSeconds: number): Promise<boolean>
 }
 
 export type ArtifactClaims = {
   iss: string
+  /** Tenant id. Checked when `VerifyArtifactOptions.tenant` is set. */
   sub: string
+  /**
+   * Audience. When `tenant` is set and this claim is present (string or
+   * array of strings), it must include that tenant.
+   */
+  aud?: string | string[]
+  /** Required. Artifacts without a non-empty `jti` are rejected. */
   jti: string
   iat: number
   nbf: number
@@ -266,6 +289,8 @@ export type ArtifactErrorCode =
   | 'artifact_bad_signature' | 'artifact_expired' | 'artifact_not_yet_valid'
   | 'artifact_issuer_mismatch' | 'artifact_params_mismatch' | 'artifact_replayed'
   | 'artifact_store_unavailable' | 'artifact_keys_unavailable'
+  | 'artifact_missing_jti' | 'artifact_tenant_mismatch' | 'artifact_audience_mismatch'
+  | 'artifact_lifetime_exceeded'
 
 export type ArtifactVerdict =
   | { valid: true; claims: ArtifactClaims }
@@ -287,6 +312,19 @@ export type VerifyArtifactOptions = {
     mandateId?: string
   }
   seenStore: SeenStore
+  /**
+   * Tenant this executor is acting for. When set, `sub` must equal it, and
+   * `aud` — if the artifact carries one — must include it (string or array).
+   * Omit only for a migration; production executors should set it. The hosted
+   * API sets `sub` to the tenant id.
+   */
+  tenant?: string
+  /**
+   * Maximum `exp - iat` in seconds. Defaults to 300, the hosted API's cap.
+   * Longer-lived artifacts, and artifacts with no numeric `iat`, are rejected
+   * with `artifact_lifetime_exceeded`.
+   */
+  maxLifetimeSeconds?: number
 }
 
 // Server-side consume (Track A.3). A 409 is a typed business deny, never an

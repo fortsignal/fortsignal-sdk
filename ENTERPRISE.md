@@ -1,7 +1,7 @@
 # FortSignal — Enterprise Integration Guide
 
 **Audience:** platform/security teams integrating FortSignal into an organization-controlled backend.
-**Last updated:** 2026-08-01 (reflects the 2026-07-31 hardening + `@fortsignal/sdk@0.1.17`)
+**Last updated:** 2026-11-19 (artifact-verifier hardening on top of `@fortsignal/sdk@0.3.0`; release as 0.4.0 — see CHANGELOG.md)
 
 ---
 
@@ -21,8 +21,8 @@ FortSignal is designed so a full compromise of our side cannot impersonate your 
 
 - **SaaS (default, available today):** SDK points at `https://api.fortsignal.com`. Nothing to host. This is the only deployment model that is live and documented today.
 - **Staging / proxy:** the SDK accepts a custom base URL — `new FortSignal({ apiKey, baseUrl })` or `FORTSIGNAL_API_URL` — for pointing at a staging environment or routing through your own proxy **to the hosted API**. This does not self-host FortSignal.
-- **Private Cloud (enterprise agreement):** the same service runs as a container inside your VPC — your endpoint, your storage, air-gap possible. Early access; contact hr@fortsignal.com.
-- **Sandbox → production:** develop against `fs_demo_key` (public sandbox tenant), then issue an `fs_live_` key from the dashboard for production. Same API, same behavior.
+- **Private Cloud (enterprise agreement):** the same service runs as a container inside your VPC — your endpoint, your storage, air-gap possible. Early access; contact hr@fortsignal.com. Point the SDK at it with `baseUrl` and set `issuer` to that deployment's artifact issuer. The default issuer remains `https://api.fortsignal.com`; changing `baseUrl` alone does not change it.
+- **Sandbox → production:** use your own dashboard API key in every environment (`FORTSIGNAL_API_KEY`, prefix `fs_live_`). `fs_demo_key` is restricted to browser requests from fortsignal.com origins and will not authenticate the SDK.
 
 ### Infrastructure requirements — none
 
@@ -44,6 +44,7 @@ These are enforced API behaviors your integration must respect (full detail with
 - **Policy enforcement is fail-closed:** unknown user, missing policy, expired policy, or any constraint mismatch denies.
 - **Receipts:** every allow returns `signalId` + `verifiedAt` + `verifiedBy` (+ `delegationId`/`policyId` for agents). Persist them with your transaction records — they are the audit link.
 - **Rate limiting:** per-tenant per-minute by tier; per-agent 1000 actions/hour, counted only after a valid signature.
+- **Offline artifacts:** `verifyArtifact` requires a `jti`, caps `exp - iat` at 300 seconds (override with `maxLifetimeSeconds`), and checks `iss` against the configured issuer. Pass `tenant` so `sub` must match and, when the artifact carries `aud`, that claim must include the same tenant. The seen-store TTL has to cover the retention deadline passed to `claim` (`exp` + 30s clock skew) — use the README Redis recipe (`seenRetentionMs`). A TTL that ends at raw `exp` forgets the id while the verifier still accepts the artifact, so the same token verifies twice, and a non-positive Redis `PX` fails the claim with `artifact_store_unavailable`.
 
 ## 5. Multi-sig governance (M-of-N)
 
@@ -72,7 +73,7 @@ Full API reference: [fortsignal.com/docs#multisig](https://fortsignal.com/docs#m
 
 ## 7. Suggested rollout
 
-1. Sandbox: register a test user + agent, run the full ceremony loop against `fs_demo_key`
+1. Development: register a test user + agent and run the full ceremony with your own API key (`process.env.FORTSIGNAL_API_KEY`)
 2. Staging: point the SDK at your staging base URL, enforce a test policy
 3. Production: issue `fs_live_` key, enroll users, approve delegations, wire `signalId` into your audit store
 4. Ongoing: key rotation runbook (90 days), lost-passkey rotation via `rotate: true`, periodic audit-chain verification
