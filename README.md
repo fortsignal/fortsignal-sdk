@@ -21,7 +21,7 @@ FortSignal hashes your action fields (`action`, `amount`, `recipient`, `source`,
 
 ## Before you start
 
-Get an API key at [fortsignal.com/signup](https://fortsignal.com/signup) — free tier: enter your email, click the verification link we send you, and your key is shown once at claim (also later in Dashboard → **API Keys**). Your key starts with `fs_live_`.
+Get an API key at [fortsignal.com/signup](https://fortsignal.com/signup) — free tier: enter your email, click the verification link we send you, and your key is shown once at claim (also later in Dashboard → **API Keys**). Your key starts with `fs_live_`. Pass it as `FORTSIGNAL_API_KEY` (see the examples below). Do not use `fs_demo_key` with the SDK.
 
 For agents: register the public key below, then approve a delegation in the [dashboard](https://www.fortsignal.com/login) — `challenge/start` and `verify` return `delegation_invalid` until a delegation is active.
 
@@ -152,32 +152,57 @@ if (result.decision === 'allow') {
 Every `allow` from `challenge.verify()` / `agent.verify()` returns an `artifact` — an Ed25519-signed JWT proving FortSignal verified those exact parameters under this policy/delegation. Denies never carry one: **absence of an artifact IS the deny.** In rare failure cases an `allow` may be returned without an `artifact` field (artifact emission fails open so a signing error never blocks a legitimate allow) — executors must treat a missing artifact exactly like a deny. Executors verify it offline before acting:
 
 ```ts
+// Startup check. An unset variable coerced to '' must not be passed through:
+// verifyArtifact throws on an empty tenant rather than skipping the check.
+const tenant = process.env.FORTSIGNAL_TENANT_ID
+if (!tenant) throw new Error('FORTSIGNAL_TENANT_ID is required')
+
 const verdict = await client.verifyArtifact(result.artifact, {
   expected: { action, recipient, amount, source, metadata },
-  seenStore: redisSeenStore,   // SET NX PX — see below
+  // `sub` must be this tenant; if the artifact carries `aud`, that claim
+  // must include it too.
+  tenant,
+  seenStore, // Redis SET NX PX — see below
 })
 if (!verdict.valid) throw new Error(`Not authorized: ${verdict.error}`)
 await execute(action)
 ```
 
-**One-shot guarantee.** Replay protection is mandatory — `verifyArtifact` throws without a `seenStore`. Each artifact `jti` can be claimed exactly once; a second verifier gets `{ valid: false, error: 'artifact_replayed' }`.
+`verifyArtifact` also enforces:
 
-**`MemorySeenStore` is single-process only** — fine for dev, never for production. Multi-instance executors MUST use a shared store; the production pattern is Redis `SET fs:seen:{jti} 1 NX PX {ttlMs}` (the claim succeeds only when the command returns OK). The `SeenStore` interface is exported for exactly this:
+- **`jti` is required** (`artifact_missing_jti`). Replay protection has nothing to key on without one.
+- **Lifetime cap.** `exp - iat` must be ≤ 300 seconds by default (`artifact_lifetime_exceeded`), the hosted API's maximum. `iat` must also be ≤ now + 30s of clock skew, and `exp` must be ≤ now + that cap + skew — a future `iat` cannot hide a year-long expiry behind a short delta. A missing `iat` fails the same way. Non-finite or absurd `iat` / `exp` / `nbf` (and a non-numeric `nbf`) are `artifact_malformed`. Self-hosted issuers with a different cap pass `maxLifetimeSeconds`.
+- **Issuer.** `iss` must equal `https://api.fortsignal.com` unless the client was constructed with `issuer` (self-hosted / private cloud). A custom `baseUrl` does not change the expected issuer — a proxy in front of the hosted API still issues hosted artifacts.
+- **Key rotation.** An unknown `kid` triggers one JWKS refetch, and a refetch is not repeated for 30 seconds, so a stream of bad kids cannot hammer `/.well-known/fs-keys.json`. The fetch times out after 5 seconds. If the fetch fails or times out, the last successfully cached keys are used for up to an hour.
+
+**One-shot guarantee.** Replay protection is mandatory — `verifyArtifact` throws without a `seenStore`. Each artifact `jti` can be claimed exactly once; a second verifier gets `{ valid: false, error: 'artifact_replayed' }`. The id stays claimed through the whole acceptance window: `exp` plus 30 seconds of clock skew. The second argument of `claim` is that deadline (the last second the verifier will still accept the artifact), not the raw `exp`. Dropping the id at `exp` lets the same artifact verify again before `artifact_expired`.
+
+**`MemorySeenStore` is single-process only** — fine for dev, never for production. Multi-instance executors MUST use a shared store. The production pattern is Redis `SET fs:seen:{jti} 1 NX PX {ttlMs}` (the claim succeeds only when the command returns OK). Use `seenRetentionMs` for the TTL. It keeps the key through the end of that deadline second and is always a positive integer — Redis rejects `PX <= 0` (`ERR invalid expire time`), which the verifier reports as `artifact_store_unavailable` and which also rejects a legitimate first use inside the skew window:
 
 ```ts
-import { MemorySeenStore } from '@fortsignal/sdk'   // dev / single-process only
-import type { SeenStore } from '@fortsignal/sdk'    // implement over Redis for production
+import { MemorySeenStore, seenRetentionMs } from '@fortsignal/sdk' // MemorySeenStore: dev / single-process only
+import type { SeenStore } from '@fortsignal/sdk'
 
 const seenStore: SeenStore = {
-  async claim(jti, expEpochSeconds) {
-    const ttlMs = expEpochSeconds * 1000 - Date.now()
+  async claim(jti, retainUntilEpochSeconds) {
+    const ttlMs = seenRetentionMs(retainUntilEpochSeconds)
     const res = await redis.set(`fs:seen:${jti}`, '1', 'PX', ttlMs, 'NX')
     return res === 'OK'
   },
 }
 ```
 
-For high-value actions, add the consume step — `client.consumeArtifact()` re-checks revocation and the policy version server-side at consume time and guarantees one-shot even against the seen-store window. Full spec (canonicalization, golden vector, all eleven error codes) → [api.fortsignal.com/docs#execution-artifacts](https://api.fortsignal.com/docs#execution-artifacts)
+Self-hosted deployments set the issuer next to the API key. Omit `issuer` for the hosted API:
+
+```ts
+const client = new FortSignal({
+  apiKey: process.env.FORTSIGNAL_API_KEY!,
+  baseUrl: process.env.FORTSIGNAL_BASE_URL, // optional
+  issuer: process.env.FORTSIGNAL_ISSUER,    // optional, exact `iss` match
+})
+```
+
+For high-value actions, add the consume step — `client.consumeArtifact()` re-checks revocation and the policy version server-side at consume time and guarantees one-shot even against the seen-store window. Full spec (canonicalization, golden vector, error codes) → [api.fortsignal.com/docs#execution-artifacts](https://api.fortsignal.com/docs#execution-artifacts)
 
 ---
 
