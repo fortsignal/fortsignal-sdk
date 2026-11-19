@@ -21,7 +21,7 @@ FortSignal hashes your action fields (`action`, `amount`, `recipient`, `source`,
 
 ## Before you start
 
-Get an API key at [fortsignal.com/signup](https://fortsignal.com/signup) — free tier: enter your email, click the verification link we send you, and your key is shown once at claim (also later in Dashboard → **API Keys**). Your key starts with `fs_live_`. Pass it as `FORTSIGNAL_API_KEY` (see the examples below). SDK and server-side calls need that key; `fs_demo_key` is only accepted for browser requests from fortsignal.com origins.
+Get an API key at [fortsignal.com/signup](https://fortsignal.com/signup) — free tier: enter your email, click the verification link we send you, and your key is shown once at claim (also later in Dashboard → **API Keys**). Your key starts with `fs_live_`. Pass it as `FORTSIGNAL_API_KEY` (see the examples below). Do not use `fs_demo_key` with the SDK.
 
 For agents: register the public key below, then approve a delegation in the [dashboard](https://www.fortsignal.com/login) — `challenge/start` and `verify` return `delegation_invalid` until a delegation is active.
 
@@ -152,11 +152,16 @@ if (result.decision === 'allow') {
 Every `allow` from `challenge.verify()` / `agent.verify()` returns an `artifact` — an Ed25519-signed JWT proving FortSignal verified those exact parameters under this policy/delegation. Denies never carry one: **absence of an artifact IS the deny.** In rare failure cases an `allow` may be returned without an `artifact` field (artifact emission fails open so a signing error never blocks a legitimate allow) — executors must treat a missing artifact exactly like a deny. Executors verify it offline before acting:
 
 ```ts
+// Startup check. An unset variable coerced to '' must not be passed through:
+// verifyArtifact throws on an empty tenant rather than skipping the check.
+const tenant = process.env.FORTSIGNAL_TENANT_ID
+if (!tenant) throw new Error('FORTSIGNAL_TENANT_ID is required')
+
 const verdict = await client.verifyArtifact(result.artifact, {
   expected: { action, recipient, amount, source, metadata },
-  // Production executors set this. `sub` must be this tenant; if the
-  // artifact carries `aud`, that claim must include it too.
-  tenant: process.env.FORTSIGNAL_TENANT_ID,
+  // `sub` must be this tenant; if the artifact carries `aud`, that claim
+  // must include it too.
+  tenant,
   seenStore, // Redis SET NX PX — see below
 })
 if (!verdict.valid) throw new Error(`Not authorized: ${verdict.error}`)
@@ -166,9 +171,9 @@ await execute(action)
 `verifyArtifact` also enforces:
 
 - **`jti` is required** (`artifact_missing_jti`). Replay protection has nothing to key on without one.
-- **Lifetime cap.** `exp - iat` must be ≤ 300 seconds by default (`artifact_lifetime_exceeded`), the hosted API's maximum. A missing `iat` fails the same way, so the cap cannot be skipped. Self-hosted issuers with a different cap pass `maxLifetimeSeconds`.
+- **Lifetime cap.** `exp - iat` must be ≤ 300 seconds by default (`artifact_lifetime_exceeded`), the hosted API's maximum. `iat` must also be ≤ now + 30s of clock skew, and `exp` must be ≤ now + that cap + skew — a future `iat` cannot hide a year-long expiry behind a short delta. A missing `iat` fails the same way. Non-finite or absurd `iat` / `exp` / `nbf` (and a non-numeric `nbf`) are `artifact_malformed`. Self-hosted issuers with a different cap pass `maxLifetimeSeconds`.
 - **Issuer.** `iss` must equal `https://api.fortsignal.com` unless the client was constructed with `issuer` (self-hosted / private cloud). A custom `baseUrl` does not change the expected issuer — a proxy in front of the hosted API still issues hosted artifacts.
-- **Key rotation.** An unknown `kid` triggers one JWKS refetch, and a refetch is not repeated for 30 seconds, so a stream of bad kids cannot hammer `/.well-known/fs-keys.json`. If the fetch fails, the last successfully cached keys are used for up to an hour.
+- **Key rotation.** An unknown `kid` triggers one JWKS refetch, and a refetch is not repeated for 30 seconds, so a stream of bad kids cannot hammer `/.well-known/fs-keys.json`. The fetch times out after 5 seconds. If the fetch fails or times out, the last successfully cached keys are used for up to an hour.
 
 **One-shot guarantee.** Replay protection is mandatory — `verifyArtifact` throws without a `seenStore`. Each artifact `jti` can be claimed exactly once; a second verifier gets `{ valid: false, error: 'artifact_replayed' }`. The id stays claimed through the whole acceptance window: `exp` plus 30 seconds of clock skew. The second argument of `claim` is that deadline (the last second the verifier will still accept the artifact), not the raw `exp`. Dropping the id at `exp` lets the same artifact verify again before `artifact_expired`.
 

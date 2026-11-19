@@ -13,6 +13,16 @@ export const ARTIFACT_CLOCK_SKEW_SECONDS = 30
 /** Hosted API cap on `exp - iat`. Override per call with `maxLifetimeSeconds`. */
 export const DEFAULT_MAX_ARTIFACT_LIFETIME_SECONDS = 300
 
+/**
+ * NumericDate values past this are not credentials. 1e12 seconds is ~year
+ * 33658, still an exact integer in IEEE-754; 1e308 is finite but absurd
+ * (`n + 30 === n`), so skew and lifetime arithmetic cannot be trusted.
+ */
+const MAX_SANE_NUMERIC_DATE = 1e12
+
+/** JWKS fetch deadline. A hung endpoint must fall back to stale keys or fail closed. */
+const JWKS_FETCH_TIMEOUT_MS = 5_000
+
 const JWKS_PATH = '/.well-known/fs-keys.json'
 const JWKS_CACHE_MS = 5 * 60 * 1000
 /** Minimum gap between JWKS fetches triggered by an unknown `kid` or a failed refresh. */
@@ -179,6 +189,12 @@ function findJwk(keys: any[], kid: unknown): any | undefined {
   return keys.find((k) => k && k.kid === kid)
 }
 
+function isSaneNumericDate(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isFinite(value)
+    && Math.abs(value) <= MAX_SANE_NUMERIC_DATE
+}
+
 function audienceIncludes(aud: unknown, tenant: string): boolean {
   if (typeof aud === 'string') return aud === tenant
   if (Array.isArray(aud)) return aud.some((entry) => entry === tenant)
@@ -189,7 +205,9 @@ async function fetchJwks(baseUrl: string, state: JwksState, now: number): Promis
   if (state.inflight) return state.inflight
   const run = (async (): Promise<LoadResult> => {
     try {
-      const res = await fetch(`${baseUrl}${JWKS_PATH}`)
+      const res = await fetch(`${baseUrl}${JWKS_PATH}`, {
+        signal: AbortSignal.timeout(JWKS_FETCH_TIMEOUT_MS),
+      })
       if (!res.ok) return keepStaleOrFail(state, now)
       const body = await res.json() as any
       if (!body || !Array.isArray(body.keys)) return keepStaleOrFail(state, now)
@@ -259,6 +277,11 @@ export async function verifyArtifact(
   if (typeof maxLifetime !== 'number' || !Number.isFinite(maxLifetime) || maxLifetime < 0) {
     throw new Error('verifyArtifact maxLifetimeSeconds must be a finite number >= 0')
   }
+  // `''` is what an unset env var becomes after `?? ''` / `|| ''`. Treating it
+  // as "omit tenant" would skip the check. Absence is the only way to skip.
+  if (typeof options.tenant === 'string' && options.tenant.length === 0) {
+    throw new Error('verifyArtifact tenant must be a non-empty string')
+  }
 
   const parts = artifact.split('.')
   if (parts.length !== 3) return { valid: false, error: 'artifact_malformed' }
@@ -306,11 +329,12 @@ export async function verifyArtifact(
     return { valid: false, error: 'artifact_bad_signature' }
   }
 
-  // 4. Temporal window
+  // 4. Temporal window. NumericDate claims must be finite and in range before
+  //    any comparison: JSON `1e309` parses as Infinity, and `1e308 + skew === 1e308`.
   const now = Math.floor(Date.now() / 1000)
-  if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) {
-    return { valid: false, error: 'artifact_malformed' }
-  }
+  if (!isSaneNumericDate(claims.exp)) return { valid: false, error: 'artifact_malformed' }
+  if ('nbf' in claims && !isSaneNumericDate(claims.nbf)) return { valid: false, error: 'artifact_malformed' }
+  if ('iat' in claims && !isSaneNumericDate(claims.iat)) return { valid: false, error: 'artifact_malformed' }
   if (claims.exp + ARTIFACT_CLOCK_SKEW_SECONDS < now) return { valid: false, error: 'artifact_expired' }
   if (typeof claims.nbf === 'number' && claims.nbf - ARTIFACT_CLOCK_SKEW_SECONDS > now) {
     return { valid: false, error: 'artifact_not_yet_valid' }
@@ -326,10 +350,22 @@ export async function verifyArtifact(
     return { valid: false, error: 'artifact_missing_jti' }
   }
 
-  // 7. Lifetime cap. `exp - iat` above the maximum (hosted API: 300s) is
-  //    rejected. A missing `iat` would skip the cap, so it fails closed too.
-  //    Checked before the seen-store claim so an invalid artifact is not burned.
-  if (typeof claims.iat !== 'number' || !Number.isFinite(claims.iat) || claims.exp - claims.iat > maxLifetime) {
+  // 7. Lifetime cap, anchored to now — not only to `exp - iat`.
+  //    A future iat (iat = now+1y-10, exp = now+1y) keeps the delta under 300s
+  //    while the token stays acceptable for a year. Reject:
+  //      exp > now + maxLifetime + skew
+  //      iat > now + skew
+  //    and still reject exp - iat above the cap. A missing iat cannot prove
+  //    either inequality, so it fails closed. Checked before the seen-store
+  //    claim so an invalid artifact is not burned.
+  if (typeof claims.iat !== 'number') return { valid: false, error: 'artifact_lifetime_exceeded' }
+  if (claims.exp > now + maxLifetime + ARTIFACT_CLOCK_SKEW_SECONDS) {
+    return { valid: false, error: 'artifact_lifetime_exceeded' }
+  }
+  if (claims.iat > now + ARTIFACT_CLOCK_SKEW_SECONDS) {
+    return { valid: false, error: 'artifact_not_yet_valid' }
+  }
+  if (claims.exp - claims.iat > maxLifetime) {
     return { valid: false, error: 'artifact_lifetime_exceeded' }
   }
 
@@ -337,7 +373,7 @@ export async function verifyArtifact(
   //    should set it. `sub` is the tenant. `aud`, when the token carries one,
   //    must include the same value (string or array, per RFC 7519).
   const tenant = options.tenant
-  if (typeof tenant === 'string' && tenant.length > 0) {
+  if (typeof tenant === 'string') {
     if (claims.sub !== tenant) return { valid: false, error: 'artifact_tenant_mismatch' }
     if (claims.aud !== undefined && !audienceIncludes(claims.aud, tenant)) {
       return { valid: false, error: 'artifact_audience_mismatch' }

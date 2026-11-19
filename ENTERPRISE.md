@@ -22,7 +22,7 @@ FortSignal is designed so a full compromise of our side cannot impersonate your 
 - **SaaS (default, available today):** SDK points at `https://api.fortsignal.com`. Nothing to host. This is the only deployment model that is live and documented today.
 - **Staging / proxy:** the SDK accepts a custom base URL — `new FortSignal({ apiKey, baseUrl })` or `FORTSIGNAL_API_URL` — for pointing at a staging environment or routing through your own proxy **to the hosted API**. This does not self-host FortSignal.
 - **Private Cloud (enterprise agreement):** the same service runs as a container inside your VPC — your endpoint, your storage, air-gap possible. Early access; contact hr@fortsignal.com. Point the SDK at it with `baseUrl` and set `issuer` to that deployment's artifact issuer. The default issuer remains `https://api.fortsignal.com`; changing `baseUrl` alone does not change it.
-- **Sandbox → production:** use your own dashboard API key in every environment (`FORTSIGNAL_API_KEY`, prefix `fs_live_`). `fs_demo_key` is restricted to browser requests from fortsignal.com origins and will not authenticate the SDK.
+- **Sandbox → production:** use your own dashboard API key in every environment (`FORTSIGNAL_API_KEY`, prefix `fs_live_`). Do not use `fs_demo_key` with the SDK.
 
 ### Infrastructure requirements — none
 
@@ -44,7 +44,7 @@ These are enforced API behaviors your integration must respect (full detail with
 - **Policy enforcement is fail-closed:** unknown user, missing policy, expired policy, or any constraint mismatch denies.
 - **Receipts:** every allow returns `signalId` + `verifiedAt` + `verifiedBy` (+ `delegationId`/`policyId` for agents). Persist them with your transaction records — they are the audit link.
 - **Rate limiting:** per-tenant per-minute by tier; per-agent 1000 actions/hour, counted only after a valid signature.
-- **Offline artifacts:** `verifyArtifact` requires a `jti`, caps `exp - iat` at 300 seconds (override with `maxLifetimeSeconds`), and checks `iss` against the configured issuer. Pass `tenant` so `sub` must match and, when the artifact carries `aud`, that claim must include the same tenant. The seen-store TTL has to cover the retention deadline passed to `claim` (`exp` + 30s clock skew) — use the README Redis recipe (`seenRetentionMs`). A TTL that ends at raw `exp` forgets the id while the verifier still accepts the artifact, so the same token verifies twice, and a non-positive Redis `PX` fails the claim with `artifact_store_unavailable`.
+- **Offline artifacts:** `verifyArtifact` requires a `jti`, caps `exp - iat` at 300 seconds (override with `maxLifetimeSeconds`), rejects an `iat` past now + clock skew and an `exp` past now + that cap + skew, and checks `iss` against the configured issuer. Pass `tenant` (a non-empty string; an empty string throws) so `sub` must match and, when the artifact carries `aud`, that claim must include the same tenant. The seen-store TTL has to cover the retention deadline passed to `claim` (`exp` + 30s clock skew) — use the README Redis recipe (`seenRetentionMs`). A TTL that ends at raw `exp` forgets the id while the verifier still accepts the artifact, so the same token verifies twice, and a non-positive Redis `PX` fails the claim with `artifact_store_unavailable`.
 
 ## 5. Multi-sig governance (M-of-N)
 

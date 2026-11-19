@@ -7,6 +7,7 @@ const realDateNow = Date.now.bind(Date)
 afterEach(() => {
   Date.now = realDateNow
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 async function makeKey() {
@@ -20,8 +21,12 @@ const b64u = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 
 async function mint(jwk: any, pair: CryptoKeyPair, claims: any): Promise<string> {
+  return mintRaw(jwk, pair, JSON.stringify(claims))
+}
+
+async function mintRaw(jwk: any, pair: CryptoKeyPair, claimsJson: string): Promise<string> {
   const header = b64u(new TextEncoder().encode(JSON.stringify({ alg: 'EdDSA', typ: 'fs-artifact+jwt', kid: jwk.kid })))
-  const body = b64u(new TextEncoder().encode(JSON.stringify(claims)))
+  const body = b64u(new TextEncoder().encode(claimsJson))
   const sig = await crypto.subtle.sign('Ed25519', pair.privateKey, new TextEncoder().encode(`${header}.${body}`))
   return `${header}.${body}.${b64u(new Uint8Array(sig))}`
 }
@@ -397,6 +402,14 @@ describe('tenant and audience', () => {
     })).toEqual({ valid: false, error: 'artifact_audience_mismatch' })
   })
 
+  it('throws when tenant is an empty string', async () => {
+    const claims = await fillParamsHash(validClaims({ sub: 'tenant_B' }), EXPECTED)
+    const token = await mint(key.jwk, key.pair, claims)
+    await expect(clientWithJwks(key.jwk).verifyArtifact(token, {
+      expected: EXPECTED, seenStore: new MemorySeenStore(), tenant: '',
+    })).rejects.toThrow(/tenant/)
+  })
+
   it('does not check sub when tenant is omitted', async () => {
     const claims = await fillParamsHash(validClaims({ sub: 'tenant_B' }), EXPECTED)
     const token = await mint(key.jwk, key.pair, claims)
@@ -441,6 +454,82 @@ describe('maximum artifact lifetime', () => {
     expect(await clientWithJwks(key.jwk).verifyArtifact(token, { expected: EXPECTED, seenStore: { claim } }))
       .toEqual({ valid: false, error: 'artifact_lifetime_exceeded' })
     expect(claim).not.toHaveBeenCalled()
+  })
+
+  it('rejects a future iat that keeps exp - iat under the cap', async () => {
+    const t0 = 1_700_000_000_000
+    Date.now = () => t0
+    const now = t0 / 1000
+    const year = 365 * 24 * 3600
+    // Delta is 10s, so the exp - iat cap does not fire. exp is a year out.
+    const shifted = await fillParamsHash(validClaims({
+      iat: now + year - 10, nbf: now, exp: now + year, jti: 'jti-shifted',
+    }), EXPECTED)
+    const claim = vi.fn(async () => true)
+    expect(await clientWithJwks(key.jwk).verifyArtifact(await mint(key.jwk, key.pair, shifted), {
+      expected: EXPECTED, seenStore: { claim },
+    })).toEqual({ valid: false, error: 'artifact_lifetime_exceeded' })
+    expect(claim).not.toHaveBeenCalled()
+
+    // iat past skew, but exp still inside now + cap + skew. Only the iat anchor fires.
+    const early = await fillParamsHash(validClaims({
+      iat: now + ARTIFACT_CLOCK_SKEW_SECONDS + 1,
+      nbf: now,
+      exp: now + 60,
+      jti: 'jti-early-iat',
+    }), EXPECTED)
+    expect(await clientWithJwks(key.jwk).verifyArtifact(await mint(key.jwk, key.pair, early), {
+      expected: EXPECTED, seenStore: new MemorySeenStore(),
+    })).toEqual({ valid: false, error: 'artifact_not_yet_valid' })
+
+    // iat == now + skew is inside the allowance.
+    const onSkew = await fillParamsHash(validClaims({
+      iat: now + ARTIFACT_CLOCK_SKEW_SECONDS,
+      nbf: now,
+      exp: now + ARTIFACT_CLOCK_SKEW_SECONDS + 60,
+      jti: 'jti-on-skew',
+    }), EXPECTED)
+    expect((await clientWithJwks(key.jwk).verifyArtifact(await mint(key.jwk, key.pair, onSkew), {
+      expected: EXPECTED, seenStore: new MemorySeenStore(),
+    })).valid).toBe(true)
+  })
+
+  it('rejects absurd and non-finite numeric dates', async () => {
+    const now = Math.floor(Date.now() / 1000)
+    const huge = await fillParamsHash(validClaims({
+      iat: 1e308, nbf: now, exp: 1e308, jti: 'jti-huge',
+    }), EXPECTED)
+    expect(await clientWithJwks(key.jwk).verifyArtifact(await mint(key.jwk, key.pair, huge), {
+      expected: EXPECTED, seenStore: new MemorySeenStore(),
+    })).toEqual({ valid: false, error: 'artifact_malformed' })
+
+    const finite = await fillParamsHash(validClaims({ iat: now, nbf: now, exp: now + 60 }), EXPECTED)
+    const raw = JSON.stringify(finite).replace(`"exp":${now + 60}`, '"exp":1e309')
+    expect(JSON.parse(raw).exp).toBe(Infinity)
+    expect(await clientWithJwks(key.jwk).verifyArtifact(await mintRaw(key.jwk, key.pair, raw), {
+      expected: EXPECTED, seenStore: new MemorySeenStore(),
+    })).toEqual({ valid: false, error: 'artifact_malformed' })
+
+    const rawIat = JSON.stringify(finite).replace(`"iat":${now}`, '"iat":1e309')
+    expect(await clientWithJwks(key.jwk).verifyArtifact(await mintRaw(key.jwk, key.pair, rawIat), {
+      expected: EXPECTED, seenStore: new MemorySeenStore(),
+    })).toEqual({ valid: false, error: 'artifact_malformed' })
+  })
+
+  it('rejects a non-numeric nbf', async () => {
+    const claims = await fillParamsHash(validClaims({ nbf: 'soon' }), EXPECTED)
+    const token = await mint(key.jwk, key.pair, claims)
+    expect(await clientWithJwks(key.jwk).verifyArtifact(token, {
+      expected: EXPECTED, seenStore: new MemorySeenStore(),
+    })).toEqual({ valid: false, error: 'artifact_malformed' })
+
+    const now = Math.floor(Date.now() / 1000)
+    const finite = await fillParamsHash(validClaims({ iat: now, nbf: now, exp: now + 60 }), EXPECTED)
+    const raw = JSON.stringify(finite).replace(`"nbf":${now}`, '"nbf":1e309')
+    expect(JSON.parse(raw).nbf).toBe(Infinity)
+    expect(await clientWithJwks(key.jwk).verifyArtifact(await mintRaw(key.jwk, key.pair, raw), {
+      expected: EXPECTED, seenStore: new MemorySeenStore(),
+    })).toEqual({ valid: false, error: 'artifact_malformed' })
   })
 
   it('honors maxLifetimeSeconds for a self-hosted cap', async () => {
@@ -600,5 +689,50 @@ describe('JWKS refresh', () => {
     expect(a.valid).toBe(true)
     expect(b.valid).toBe(true)
     expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  function timeoutFetch() {
+    const requested: number[] = []
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      requested.push(ms)
+      const controller = new AbortController()
+      controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
+      return controller.signal
+    })
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.signal?.aborted) throw init.signal.reason
+      throw new Error('JWKS fetch was not given an aborted timeout signal')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    return { requested, fetchMock }
+  }
+
+  it('uses stale keys when the JWKS fetch times out', async () => {
+    const claims = await fillParamsHash(validClaims(), EXPECTED)
+    const token = await mint(key.jwk, key.pair, claims)
+    const client = clientWithJwks(key.jwk)
+    const now = Date.now()
+    const cache = (client as any).jwksState.cache
+    cache.expiresAt = now - 1000
+    cache.fetchedAt = now - 10 * 60 * 1000
+    cache.attemptedAt = now - 10 * 60 * 1000
+    const { requested } = timeoutFetch()
+
+    expect((await client.verifyArtifact(token, { expected: EXPECTED, seenStore: new MemorySeenStore() })).valid).toBe(true)
+    expect(requested).toEqual([5_000])
+  })
+
+  it('returns keys unavailable when a JWKS timeout has no cached keys', async () => {
+    const claims = await fillParamsHash(validClaims(), EXPECTED)
+    const token = await mint(key.jwk, key.pair, claims)
+    const client = new FortSignal({ apiKey: 'fs_live_test', baseUrl: 'https://jwks.test' })
+    const { requested, fetchMock } = timeoutFetch()
+    expect(await client.verifyArtifact(token, { expected: EXPECTED, seenStore: new MemorySeenStore() }))
+      .toEqual({ valid: false, error: 'artifact_keys_unavailable' })
+    expect(requested).toEqual([5_000])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const reason = fetchMock.mock.calls[0][1]?.signal?.reason
+    expect(reason).toBeInstanceOf(DOMException)
+    expect((reason as DOMException).name).toBe('TimeoutError')
   })
 })

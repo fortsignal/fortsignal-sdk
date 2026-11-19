@@ -315,14 +315,17 @@ export type VerifyArtifactOptions = {
   /**
    * Tenant this executor is acting for. When set, `sub` must equal it, and
    * `aud` — if the artifact carries one — must include it (string or array).
-   * Omit only for a migration; production executors should set it. The hosted
-   * API sets `sub` to the tenant id.
+   * Omit the property to skip the check. An empty string throws: that is what
+   * an unset env var becomes after `?? ''`, and it must not silently skip.
+   * The hosted API sets `sub` to the tenant id.
    */
   tenant?: string
   /**
    * Maximum `exp - iat` in seconds. Defaults to 300, the hosted API's cap.
-   * Longer-lived artifacts, and artifacts with no numeric `iat`, are rejected
-   * with `artifact_lifetime_exceeded`.
+   * `exp` later than now + this cap + clock skew is `artifact_lifetime_exceeded`.
+   * `iat` later than now + clock skew is `artifact_not_yet_valid`.
+   * A missing `iat` is `artifact_lifetime_exceeded`. Non-finite or absurd
+   * numeric dates are `artifact_malformed`.
    */
   maxLifetimeSeconds?: number
 }
