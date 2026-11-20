@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-19
 
-Offline artifact verification hardening. Ship as **0.4.0** (`npm version minor`). Do not publish a patch over 0.3.0: two of the checks below reject artifacts that 0.3.0 accepted.
+Offline artifact verification hardening. Minor version bump because some checks below reject artifacts that 0.3.0 accepted.
 
 ### Breaking
 
